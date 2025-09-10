@@ -2,11 +2,12 @@
 export interface ChatMessage {
   id: string;
   role: 'user' | 'model';
-  content: string;
+  content: string | Idea | Signal | Health;
 }
 
 // These types are based on the OpenAPI spec and can be used for potential future structured data rendering.
 export interface Idea {
+  type: 'idea';
   symbol: string;
   strategy: string;
   entry_low: number;
@@ -20,6 +21,7 @@ export interface Idea {
 }
 
 export interface Signal {
+  type: 'signal';
   ts: string;
   strategy: string;
   side: 'long' | 'short';
@@ -29,6 +31,7 @@ export interface Signal {
 }
 
 export interface Health {
+    type: 'health';
     ingest_ok: boolean;
     last_tick_ts: string;
     sources_ok: string[];
