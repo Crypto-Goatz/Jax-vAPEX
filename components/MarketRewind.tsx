@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { getHistoricalEvents } from '../services/geminiService';
-import { fetchHistoricalData, HistoricalData } from '../services/cryptoService';
+import { fetchHistoricalSnapshot, HistoricalCryptoPrice } from '../services/cryptoService';
 import { LoadingSpinner } from './LoadingSpinner';
-import { NewsIcon, BankIcon, PipelineIcon, SocialIcon } from './Icons';
+import { NewsIcon, BankIcon, PipelineIcon, SocialIcon, TrendingUpIcon, TrendingDownIcon } from './Icons';
 
 // --- TYPE DEFINITIONS ---
 type EventCategory = 'News & Narrative' | 'Economic' | 'On-Chain & Technical' | 'Social & Community';
@@ -86,32 +86,76 @@ const DateSelector: React.FC<{ onAnalyze: (date: string) => void, isLoading: boo
     );
 };
 
+const SnapshotMoverTable: React.FC<{ title: string; data: HistoricalCryptoPrice[]; isGainer: boolean }> = ({ title, data, isGainer }) => (
+    <div className="flex-1">
+        <h4 className="text-lg font-bold text-white mb-2 flex items-center">
+            {isGainer ? <TrendingUpIcon className="text-green-400 mr-2" /> : <TrendingDownIcon className="text-red-400 mr-2" />}
+            {title}
+        </h4>
+        <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left">
+                <thead className="text-xs text-gray-400 uppercase bg-gray-700/30">
+                    <tr>
+                        <th className="p-2">Asset</th>
+                        <th className="p-2 text-right">Price</th>
+                        <th className="p-2 text-right">24h Change</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-700/50">
+                    {data.map(coin => (
+                        <tr key={coin.id}>
+                            <td className="p-2 font-medium text-gray-200">{coin.symbol}</td>
+                            <td className="p-2 text-right font-mono text-gray-300">${coin.price.toLocaleString()}</td>
+                            <td className={`p-2 text-right font-mono font-semibold ${isGainer ? 'text-green-400' : 'text-red-400'}`}>
+                                {isGainer ? '+' : ''}{coin.change24h.toFixed(2)}%
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    </div>
+);
+
+
+const MarketSnapshot: React.FC<{ date: string; data: HistoricalCryptoPrice[] }> = ({ date, data }) => {
+    const sortedData = [...data];
+    const topGainers = sortedData.sort((a, b) => b.change24h - a.change24h).slice(0, 5);
+    const topLosers = sortedData.sort((a, b) => a.change24h - b.change24h).slice(0, 5);
+    
+    return (
+        <div className="flex flex-col h-full">
+            <h3 className="text-xl font-bold text-white mb-4">Market Snapshot for {date}</h3>
+            <div className="flex flex-col md:flex-row gap-6 flex-1">
+                <SnapshotMoverTable title="Top Gainers" data={topGainers} isGainer={true} />
+                <SnapshotMoverTable title="Top Losers" data={topLosers} isGainer={false} />
+            </div>
+        </div>
+    );
+};
+
 // --- MAIN COMPONENT ---
 export const MarketRewind: React.FC = () => {
     const [analysis, setAnalysis] = useState<HistoricalAnalysis | null>(null);
-    const [chartData, setChartData] = useState<HistoricalData | null>(null);
+    const [snapshotData, setSnapshotData] = useState<HistoricalCryptoPrice[] | null>(null);
     const [selectedDate, setSelectedDate] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    
-    const chartCanvasRef = useRef<HTMLCanvasElement>(null);
-    const chartInstanceRef = useRef<any>(null);
 
     const handleAnalyze = useCallback(async (date: string) => {
         setIsLoading(true);
         setError(null);
         setAnalysis(null);
-        setChartData(null);
+        setSnapshotData(null);
         setSelectedDate(date);
 
         try {
-            // We fetch for 'bitcoin' and a '30d' timeframe for demonstration
             const [eventsData, priceData] = await Promise.all([
                 getHistoricalEvents(date),
-                fetchHistoricalData('bitcoin', '30d') 
+                fetchHistoricalSnapshot(date) 
             ]);
             setAnalysis(eventsData);
-            setChartData(priceData);
+            setSnapshotData(priceData);
 
         } catch (err) {
             console.error("Failed to fetch historical analysis:", err);
@@ -120,77 +164,16 @@ export const MarketRewind: React.FC = () => {
             setIsLoading(false);
         }
     }, []);
-
+    
+    // Auto-load data for a valid date on initial render
     useEffect(() => {
-        if (chartInstanceRef.current) {
-          chartInstanceRef.current.destroy();
-        }
-        if (chartCanvasRef.current && chartData && selectedDate) {
-          const ctx = chartCanvasRef.current.getContext('2d');
-          const selectedDateIndex = chartData.labels.findIndex(label => {
-             // This is a rough match for the simulated labels. A real implementation would parse dates.
-             const d = new Date(selectedDate);
-             const labelDateStr = `${d.toLocaleString('default', { month: 'short' })} ${d.getDate()}`;
-             return label.includes(labelDateStr);
-          });
+        const today = new Date();
+        const yesterday = new Date(today);
+        yesterday.setDate(today.getDate() - 1);
+        const yesterdayString = yesterday.toISOString().split('T')[0];
+        handleAnalyze(yesterdayString);
+    }, [handleAnalyze]);
 
-          if (ctx) {
-            chartInstanceRef.current = new window.Chart(ctx, {
-              type: 'line',
-              data: {
-                labels: chartData.labels,
-                datasets: [{
-                  label: `BTC Price`,
-                  data: chartData.prices,
-                  borderColor: 'rgba(168, 85, 247, 0.8)',
-                  backgroundColor: 'rgba(168, 85, 247, 0.1)',
-                  borderWidth: 2,
-                  pointRadius: 0,
-                  tension: 0.4,
-                  fill: true,
-                }]
-              },
-              options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                  x: { grid: { color: 'rgba(255, 255, 255, 0.1)' }, ticks: { color: '#9ca3af' } },
-                  y: { grid: { color: 'rgba(255, 255, 255, 0.1)' }, ticks: { color: '#9ca3af', callback: (v: any) => `$${Number(v).toLocaleString()}` } }
-                },
-                plugins: {
-                  legend: { display: false },
-                  tooltip: { mode: 'index', intersect: false },
-                  annotation: {
-                      annotations: {
-                          line1: {
-                              type: 'line',
-                              xMin: selectedDateIndex !== -1 ? selectedDateIndex : 15, // Default to middle if not found
-                              xMax: selectedDateIndex !== -1 ? selectedDateIndex : 15,
-                              borderColor: 'rgba(255, 255, 255, 0.5)',
-                              borderWidth: 2,
-                              borderDash: [6, 6],
-                              label: {
-                                  content: `Selected: ${selectedDate}`,
-                                  enabled: true,
-                                  position: 'start',
-                                  backgroundColor: 'rgba(31, 41, 55, 0.8)',
-                                  color: '#d1d5db',
-                                  yAdjust: -10,
-                              }
-                          }
-                      }
-                  }
-                },
-              },
-            });
-          }
-        }
-        return () => {
-          if (chartInstanceRef.current) {
-            chartInstanceRef.current.destroy();
-          }
-        };
-      }, [chartData, selectedDate]);
 
     return (
         <div className="w-full h-full flex flex-col bg-gray-800/50 rounded-lg shadow-2xl border border-gray-700 overflow-hidden">
@@ -202,11 +185,6 @@ export const MarketRewind: React.FC = () => {
             <DateSelector onAnalyze={handleAnalyze} isLoading={isLoading} />
             
             <div className="flex-1 p-4 overflow-y-auto">
-                {!selectedDate && (
-                    <div className="flex items-center justify-center h-full">
-                        <p className="text-gray-500 text-lg">Select a date to begin analysis.</p>
-                    </div>
-                )}
                 {isLoading && (
                     <div className="flex items-center justify-center h-full">
                         <div className="text-center space-y-3">
@@ -216,7 +194,7 @@ export const MarketRewind: React.FC = () => {
                         </div>
                     </div>
                 )}
-                {error && (
+                {error && !isLoading && (
                     <div className="flex items-center justify-center h-full">
                          <div className="text-center p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
                             <p className="font-semibold text-red-400">Failed to Load Analysis</p>
@@ -225,14 +203,11 @@ export const MarketRewind: React.FC = () => {
                     </div>
                 )}
 
-                {analysis && chartData && (
+                {analysis && snapshotData && !isLoading && (
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full animate-fade-in">
-                        {/* Left Side: Chart */}
-                        <div className="lg:col-span-2 bg-gray-900/50 p-4 rounded-lg border border-gray-700 h-[60vh]">
-                            <h3 className="text-lg font-bold text-white mb-2">BTC/USD Price Action (30-Day View)</h3>
-                            <div className="relative h-[90%]">
-                                <canvas ref={chartCanvasRef}></canvas>
-                            </div>
+                        {/* Left Side: Market Snapshot */}
+                         <div className="lg:col-span-2 bg-gray-900/50 p-4 rounded-lg border border-gray-700 h-[60vh] flex flex-col">
+                            <MarketSnapshot date={selectedDate!} data={snapshotData} />
                         </div>
 
                         {/* Right Side: AI Analysis */}

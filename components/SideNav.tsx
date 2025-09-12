@@ -1,6 +1,7 @@
 import React from 'react';
 import { CloseIcon, ChartBarIcon, DatabaseIcon, PipelineIcon, LineChartIcon, ChatBubbleIcon, WalletIcon, RewindIcon } from './Icons';
 import type { ActiveView } from '../App';
+import { Logo } from './Logo';
 
 type SideNavProps = {
   isOpen: boolean;
@@ -29,11 +30,14 @@ export const SideNav: React.FC<SideNavProps> = ({ isOpen, onClose, activeView, s
         aria-label="Main Navigation">
         {/* Header section */}
         <div className="p-4 flex justify-between items-center border-b border-gray-700 h-[73px]">
-          <div>
-            <h1 className="text-2xl font-bold text-white">
-              Jax<span className="text-purple-400">Spot</span>
-            </h1>
-            <p className="text-xs text-gray-400">Crypto Goatz AI Market Agent</p>
+           <div className="flex items-center space-x-3">
+            <Logo className="h-10 w-auto" />
+            <div>
+              <h1 className="text-xl font-bold text-white">
+                Jax<span className="text-purple-400">Spot</span>
+              </h1>
+              <p className="text-xs text-gray-400">AI Market Agent</p>
+            </div>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-white md:hidden" aria-label="Close navigation menu">
             <CloseIcon />

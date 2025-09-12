@@ -40,6 +40,29 @@ const responseSchema = {
                 last_tick_ts: { type: Type.STRING, nullable: true },
                 sources_ok: { type: Type.ARRAY, items: { type: Type.STRING }, nullable: true },
             }
+        },
+        context: {
+            type: Type.OBJECT,
+            nullable: true,
+            properties: {
+                symbol: { type: Type.STRING, nullable: true },
+                narrative: { type: Type.STRING, nullable: true },
+                posts: {
+                    type: Type.ARRAY,
+                    nullable: true,
+                    items: {
+                        type: Type.OBJECT,
+                        properties: {
+                            platform: { type: Type.STRING, enum: ['X', 'Other'], nullable: true },
+                            user: { type: Type.STRING, nullable: true },
+                            handle: { type: Type.STRING, nullable: true },
+                            content: { type: Type.STRING, nullable: true },
+                            url: { type: Type.STRING, nullable: true },
+                            avatarUrl: { type: Type.STRING, nullable: true },
+                        }
+                    }
+                }
+            }
         }
     },
     required: ['type', 'payload']
@@ -78,78 +101,6 @@ export async function runChat(prompt: string): Promise<string> {
     }
 }
 
-// Schema for the SpotLive Dashboard
-const spotLiveSchema = {
-    type: Type.OBJECT,
-    properties: {
-        news: {
-            type: Type.ARRAY,
-            description: 'A list of the top 5 most relevant news headlines for the crypto market.',
-            items: {
-                type: Type.OBJECT,
-                properties: {
-                    source: { type: Type.STRING, description: 'The source of the news article (e.g., CryptoIntel, DeFi Pulse).' },
-                    title: { type: Type.STRING, description: 'The headline of the news article.' },
-                    sentiment: { type: Type.STRING, enum: ['Bullish', 'Bearish', 'Neutral'], description: 'The overall sentiment of the news.' },
-                    tag: { type: Type.STRING, description: 'A relevant crypto ticker or topic tag (e.g., ETH, BTC, SECURITY).' },
-                },
-                required: ['source', 'title', 'sentiment', 'tag']
-            }
-        },
-        events: {
-            type: Type.ARRAY,
-            description: 'A list of 5 key upcoming events that could impact the crypto market.',
-            items: {
-                type: Type.OBJECT,
-                properties: {
-                    date: { type: Type.STRING, description: 'The date of the event in "Mon DD, YYYY" format (e.g., Jun 28, 2024).' },
-                    title: { type: Type.STRING, description: 'A brief description of the event.' },
-                    impact: { type: Type.STRING, enum: ['High', 'Medium', 'Low'], description: 'The potential market impact of the event.' },
-                    coin: { type: Type.STRING, description: 'The primary crypto ticker affected or "GLOBAL".' },
-                },
-                required: ['date', 'title', 'impact', 'coin']
-            }
-        },
-        socialTrends: {
-            type: Type.ARRAY,
-            description: 'A list of the top 5 trending topics on social media related to crypto.',
-            items: {
-                type: Type.OBJECT,
-                properties: {
-                    topic: { type: Type.STRING, description: 'The trending topic or hashtag (e.g., #RealWorldAssets, $PEPE).' },
-                    volume: { type: Type.INTEGER, description: 'A relative score from 0 to 100 indicating the social media chatter volume.' },
-                    sentiment: { type: Type.STRING, enum: ['Positive', 'Negative', 'Neutral'], description: 'The general sentiment of the social media conversation.' },
-                },
-                required: ['topic', 'volume', 'sentiment']
-            }
-        }
-    },
-    required: ['news', 'events', 'socialTrends']
-};
-
-export async function getSpotLiveData(): Promise<{ news: any[], events: any[], socialTrends: any[] }> {
-    const prompt = `Analyze the current cryptocurrency market and generate a concise, real-time dashboard summary. Provide the top 5 most impactful news headlines, 5 key upcoming events, and the 5 most prominent social media trends. Adhere strictly to the provided JSON schema.`;
-    try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-            config: {
-                responseMimeType: 'application/json',
-                responseSchema: spotLiveSchema,
-            }
-        });
-
-        const jsonString = response.text;
-        const parsedData = JSON.parse(jsonString);
-        return parsedData;
-
-    } catch (error) {
-        console.error("Error fetching SpotLive data from Gemini API:", error);
-        throw new Error("Failed to fetch AI-curated market data.");
-    }
-}
-
-
 // Schema for the Market Narratives Dashboard
 const marketNarrativesSchema = {
   type: Type.OBJECT,
@@ -163,6 +114,7 @@ const marketNarrativesSchema = {
           title: { type: Type.STRING, description: 'A catchy headline for the narrative.' },
           summary: { type: Type.STRING, description: 'A 2-3 sentence summary explaining the narrative.' },
           pipeline_stage: { type: Type.STRING, enum: ['Watchlist', 'Signal', 'Spot', 'Hold', 'Exit'], description: 'The pipeline stage this narrative most relates to.' },
+          timestamp: { type: Type.STRING, description: 'The ISO 8601 timestamp of when this narrative was identified.' },
           key_indicators: {
             type: Type.ARRAY,
             description: 'A list of 2-3 simulated data points supporting the narrative.',
@@ -174,7 +126,7 @@ const marketNarrativesSchema = {
             items: { type: Type.STRING },
           },
         },
-        required: ['title', 'summary', 'pipeline_stage', 'key_indicators', 'affected_assets'],
+        required: ['title', 'summary', 'pipeline_stage', 'key_indicators', 'affected_assets', 'timestamp'],
       },
     },
     market_movers_commentary: {
@@ -203,7 +155,7 @@ export async function getMarketNarratives(): Promise<any> {
     - Stage 4 (Hold): Monitoring news and momentum for ongoing trades.
     - Stage 5 (Exit): Identifying sell triggers from whale dumps or negative sentiment flips.
 
-    Based on your simulated analysis of these stages, generate 3-4 distinct, currently active "market narratives". For each narrative, provide a title, a summary, the most relevant pipeline stage, key data indicators (be specific, e.g., "Whale inflows detected for LINK", "Funding rates for SOL flipping negative"), and the assets it affects.
+    Based on your simulated analysis of these stages, generate 3-4 distinct, currently active "market narratives". For each narrative, provide a title, a summary, the most relevant pipeline stage, key data indicators (be specific, e.g., "Whale inflows detected for LINK", "Funding rates for SOL flipping negative"), the assets it affects, and the current ISO 8601 timestamp for when the narrative was generated.
 
     Additionally, provide a brief, plausible "Jax-Comment" for a list of top market movers, linking their performance to these narratives where possible.
 

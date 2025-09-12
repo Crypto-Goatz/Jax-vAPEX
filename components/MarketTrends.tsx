@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { fetchLivePricing, CryptoPrice } from '../services/cryptoService';
 import { getMarketNarratives } from '../services/geminiService';
 import { LoadingSpinner } from './LoadingSpinner';
-import { FunnelIcon, SignalIcon, RocketIcon, HoldIcon, ExitIcon, TrendingUpIcon, TrendingDownIcon, CheckCircleIcon, RefreshIcon } from './Icons';
+import { FunnelIcon, SignalIcon, RocketIcon, HoldIcon, ExitIcon, TrendingUpIcon, TrendingDownIcon, CheckCircleIcon, RefreshIcon, ClockIcon } from './Icons';
 
 // --- TYPE DEFINITIONS ---
 interface Narrative {
@@ -11,6 +11,7 @@ interface Narrative {
     pipeline_stage: string;
     key_indicators: string[];
     affected_assets: string[];
+    timestamp: string;
 }
 interface MoverComment {
     symbol: string;
@@ -48,7 +49,13 @@ const PipelineStageCard: React.FC<{
 const NarrativeCard: React.FC<{ narrative: Narrative }> = ({ narrative }) => {
     return (
         <div className="bg-gray-800 p-4 rounded-lg border border-gray-700 animate-fade-in-up break-inside-avoid mb-4 transition-all duration-200 hover:shadow-lg hover:shadow-purple-500/20 hover:border-purple-500/50 hover:-translate-y-1">
-            <h3 className="font-bold text-lg text-white">{narrative.title}</h3>
+            <div className="flex justify-between items-start gap-2">
+                <h3 className="font-bold text-lg text-white">{narrative.title}</h3>
+                <div className="flex items-center space-x-1.5 text-xs text-gray-500 flex-shrink-0 whitespace-nowrap">
+                    <ClockIcon className="w-3.5 h-3.5" />
+                    <span>{new Date(narrative.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+                </div>
+            </div>
             <p className="text-sm text-purple-400 font-semibold my-1">Pipeline Stage: {narrative.pipeline_stage}</p>
             <p className="text-sm text-gray-300 mt-2">{narrative.summary}</p>
             <div className="mt-4">
@@ -184,9 +191,9 @@ export const MarketTrends: React.FC = () => {
 
 
         return (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full">
-                {/* Left Column: Pipeline */}
-                <div className="lg:col-span-3 space-y-3 flex flex-col">
+             <div className="flex flex-col md:flex-row gap-6 h-full">
+                {/* Left Column: Pipeline (Funnel) */}
+                <div className="w-full md:w-1/3 lg:w-1/4 space-y-3 flex flex-col">
                     <h3 className="text-lg font-bold text-purple-400">Intelligence Funnel</h3>
                     <div className="space-y-3">
                         {pipelineStages.map((stage, index) => (
@@ -203,35 +210,38 @@ export const MarketTrends: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Center Column: Narratives */}
-                <div className="lg:col-span-6">
-                     <h3 className="text-lg font-bold text-purple-400 mb-4">
-                        {selectedStage ? `Narratives: ${selectedStage}` : 'Emerging Narratives'}
-                     </h3>
-                     <div className="md:columns-2 gap-4">
-                        {filteredNarratives.length > 0 ? (
-                           filteredNarratives.map((narrative, index) => (
-                              <NarrativeCard key={index} narrative={narrative} />
-                           ))
-                        ) : (
-                           <div className="text-center text-gray-500 p-4 bg-gray-800 rounded-lg break-inside-avoid">
-                              No narratives match the selected stage.
-                           </div>
-                        )}
-                     </div>
-                </div>
+                {/* Right-side Container for Center and Right columns */}
+                <div className="w-full md:w-2/3 lg:w-3/4 flex flex-col lg:flex-row gap-6">
+                    {/* Center Column: Narratives */}
+                    <div className="w-full lg:w-2/3">
+                         <h3 className="text-lg font-bold text-purple-400 mb-4">
+                            {selectedStage ? `Narratives: ${selectedStage}` : 'Emerging Narratives'}
+                         </h3>
+                         <div className="md:columns-2 gap-4">
+                            {filteredNarratives.length > 0 ? (
+                               filteredNarratives.map((narrative, index) => (
+                                  <NarrativeCard key={index} narrative={narrative} />
+                               ))
+                            ) : (
+                               <div className="text-center text-gray-500 p-4 bg-gray-800 rounded-lg break-inside-avoid">
+                                  No narratives match the selected stage.
+                               </div>
+                            )}
+                         </div>
+                    </div>
 
-                {/* Right Column: Market Movers */}
-                <div className="lg:col-span-3 space-y-4">
-                     <h3 className="text-lg font-bold text-purple-400 flex items-center"><TrendingUpIcon className="text-green-400 mr-2"/> Top Gainers</h3>
-                     <div className="space-y-3">
-                        {topGainers.map(coin => <MarketMoverCard key={coin.id} coin={coin} comment={getCommentForSymbol(coin.symbol)} />)}
-                     </div>
+                    {/* Right Column: Market Movers */}
+                    <div className="w-full lg:w-1/3 space-y-4">
+                         <h3 className="text-lg font-bold text-purple-400 flex items-center"><TrendingUpIcon className="text-green-400 mr-2"/> Top Gainers</h3>
+                         <div className="space-y-3">
+                            {topGainers.map(coin => <MarketMoverCard key={coin.id} coin={coin} comment={getCommentForSymbol(coin.symbol)} />)}
+                         </div>
 
-                     <h3 className="text-lg font-bold text-purple-400 pt-4 flex items-center"><TrendingDownIcon className="text-red-400 mr-2"/> Top Losers</h3>
-                      <div className="space-y-3">
-                        {topLosers.map(coin => <MarketMoverCard key={coin.id} coin={coin} comment={getCommentForSymbol(coin.symbol)} />)}
-                     </div>
+                         <h3 className="text-lg font-bold text-purple-400 pt-4 flex items-center"><TrendingDownIcon className="text-red-400 mr-2"/> Top Losers</h3>
+                          <div className="space-y-3">
+                            {topLosers.map(coin => <MarketMoverCard key={coin.id} coin={coin} comment={getCommentForSymbol(coin.symbol)} />)}
+                         </div>
+                    </div>
                 </div>
             </div>
         );

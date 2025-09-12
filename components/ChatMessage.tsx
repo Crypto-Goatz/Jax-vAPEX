@@ -1,4 +1,3 @@
-
 import React from 'react';
 import type { ChatMessage as ChatMessageType, Idea, Signal, Health } from '../types';
 import { UserIcon, JaxIcon } from './Icons';
@@ -14,7 +13,12 @@ const formatContent = (content: string) => {
         .replace(/(\r\n|\n|\r)/g, '<br />'); // Newlines
 };
 
-export const ChatMessage: React.FC<{ message: ChatMessageType }> = ({ message }) => {
+interface ChatMessageProps {
+    message: ChatMessageType;
+    onViewChartForIdea?: (idea: Idea) => void;
+}
+
+export const ChatMessage: React.FC<ChatMessageProps> = ({ message, onViewChartForIdea }) => {
   const isModel = message.role === 'model';
 
   if (isModel) {
@@ -24,7 +28,7 @@ export const ChatMessage: React.FC<{ message: ChatMessageType }> = ({ message })
         const formattedContent = formatContent(message.content);
         contentToRender = <p className="text-gray-200 leading-relaxed p-4" dangerouslySetInnerHTML={{ __html: formattedContent }}></p>;
     } else if (message.content.type === 'idea') {
-        contentToRender = <IdeaCard idea={message.content as Idea} />;
+        contentToRender = <IdeaCard idea={message.content as Idea} onViewChart={onViewChartForIdea} />;
     } else if (message.content.type === 'signal') {
         contentToRender = <SignalCard signal={message.content as Signal} />;
     } else if (message.content.type === 'health') {

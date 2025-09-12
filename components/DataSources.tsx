@@ -203,7 +203,7 @@ export const DataSources: React.FC = () => {
                         value={tvApiKey}
                         onChange={(e) => setTvApiKey(e.target.value)}
                         placeholder="********************"
-                        className="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        className="w-full bg-gradient-to-r from-purple-600 to-blue-500 border border-transparent rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-2 focus:ring-offset-gray-800 transition-shadow placeholder:text-gray-200"
                       />
                   </div>
                    <div>
@@ -214,7 +214,7 @@ export const DataSources: React.FC = () => {
                         value={tvApiSecret}
                         onChange={(e) => setTvApiSecret(e.target.value)}
                         placeholder="********************"
-                        className="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        className="w-full bg-gradient-to-r from-purple-600 to-blue-500 border border-transparent rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-2 focus:ring-offset-gray-800 transition-shadow placeholder:text-gray-200"
                       />
                   </div>
                   {tvConnectionStatus === 'error' && <p className="text-sm text-red-400">{tvError}</p>}

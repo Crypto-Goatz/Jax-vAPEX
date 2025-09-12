@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { CryptoPrice, fetchHistoricalData, HistoricalData } from '../services/cryptoService';
+import { fetchHistoricalData, HistoricalData } from '../services/cryptoService';
 import { LoadingSpinner } from './LoadingSpinner';
 import { CloseIcon } from './Icons';
+import type { Trade } from '../services/tradeSimulatorService';
 
 declare global {
   interface Window { Chart: any; }
@@ -10,14 +11,30 @@ declare global {
 type Timeframe = '24h' | '7d' | '30d' | '1y';
 
 interface CryptoChartModalProps {
-  coin: CryptoPrice;
+  trade: Trade;
   onClose: () => void;
+  initialTimeframe?: Timeframe;
 }
 
-export const CryptoChartModal: React.FC<CryptoChartModalProps> = ({ coin, onClose }) => {
-  const [timeframe, setTimeframe] = useState<Timeframe>('30d');
+const formatCurrency = (value: number | null | undefined) => {
+    if (value === null || value === undefined || !isFinite(value)) {
+        return 'N/A';
+    }
+    const fractionDigits = (Math.abs(value) > 0 && Math.abs(value) < 1) ? 6 : 2;
+    return value.toLocaleString('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: Math.max(2, fractionDigits)
+    });
+};
+
+
+export const CryptoChartModal: React.FC<CryptoChartModalProps> = ({ trade, onClose, initialTimeframe }) => {
+  const [timeframe, setTimeframe] = useState<Timeframe>(initialTimeframe || '30d');
   const [chartData, setChartData] = useState<HistoricalData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const { coin } = trade;
   
   const chartCanvasRef = useRef<HTMLCanvasElement>(null);
   const chartInstanceRef = useRef<any>(null);
@@ -26,7 +43,7 @@ export const CryptoChartModal: React.FC<CryptoChartModalProps> = ({ coin, onClos
     const getData = async () => {
       setIsLoading(true);
       try {
-        const data = await fetchHistoricalData(coin.id, timeframe);
+        const data = await fetchHistoricalData(coin.symbol, timeframe);
         setChartData(data);
       } catch (error) {
         console.error("Failed to fetch historical data:", error);
@@ -36,7 +53,7 @@ export const CryptoChartModal: React.FC<CryptoChartModalProps> = ({ coin, onClos
       }
     };
     getData();
-  }, [coin.id, timeframe]);
+  }, [coin.symbol, timeframe]);
 
   useEffect(() => {
     if (chartInstanceRef.current) {
@@ -45,6 +62,112 @@ export const CryptoChartModal: React.FC<CryptoChartModalProps> = ({ coin, onClos
     if (chartCanvasRef.current && chartData) {
       const ctx = chartCanvasRef.current.getContext('2d');
       if (ctx) {
+        
+        // --- Dynamic Highlighting Logic ---
+        let tpCrossed = false;
+        let slCrossed = false;
+
+        if (trade.takeProfitPrice && trade.stopLossPrice) {
+            for (const price of chartData.prices) {
+                if (trade.direction === 'buy') {
+                    if (price >= trade.takeProfitPrice) tpCrossed = true;
+                    if (price <= trade.stopLossPrice) slCrossed = true;
+                } else { // 'sell'
+                    if (price <= trade.takeProfitPrice) tpCrossed = true;
+                    if (price >= trade.stopLossPrice) slCrossed = true;
+                }
+            }
+        }
+        
+        const annotations: any = {};
+        const isClosed = trade.status === 'closed';
+
+        // --- ENHANCEMENT: Add a shaded box to represent P/L on closed trades ---
+        if (isClosed && trade.closePrice) {
+            const isProfit = trade.pnl !== null && trade.pnl >= 0;
+            annotations.pnlBox = {
+                type: 'box',
+                yMin: Math.min(trade.entryPrice, trade.closePrice),
+                yMax: Math.max(trade.entryPrice, trade.closePrice),
+                backgroundColor: isProfit ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                borderColor: isProfit ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)',
+                borderWidth: 1,
+            };
+        }
+
+        // --- ENHANCEMENT: Highlight entry line on closed trades ---
+        annotations.entryLine = {
+            type: 'line',
+            yMin: trade.entryPrice,
+            yMax: trade.entryPrice,
+            borderColor: 'rgb(59, 130, 246)', // blue-500
+            borderWidth: isClosed ? 3 : 2, // Thicker if closed
+            borderDash: [6, 6],
+            label: {
+                content: `Entry: ${formatCurrency(trade.entryPrice)}`,
+                enabled: true,
+                position: 'end',
+                backgroundColor: 'rgba(59, 130, 246, 0.8)',
+                color: 'white',
+                font: { size: 10, weight: isClosed ? 'bold' : 'normal' }
+            }
+        };
+
+        // --- ENHANCEMENT: Highlight close line (it only exists on closed trades) ---
+        if (trade.closePrice) {
+            annotations.closeLine = {
+                type: 'line',
+                yMin: trade.closePrice,
+                yMax: trade.closePrice,
+                borderColor: 'rgb(107, 114, 128)', // gray-500
+                borderWidth: 3, // Always thicker as it only shows when closed
+                label: {
+                    content: `Close: ${formatCurrency(trade.closePrice)}`,
+                    enabled: true,
+                    position: 'end',
+                    backgroundColor: 'rgba(107, 114, 128, 0.9)',
+                    color: 'white',
+                    font: { size: 10, weight: 'bold' }
+                }
+            };
+        }
+
+        if (trade.takeProfitPrice) {
+            annotations.tpLine = {
+                type: 'line',
+                yMin: trade.takeProfitPrice,
+                yMax: trade.takeProfitPrice,
+                borderColor: tpCrossed ? 'rgb(34, 197, 94)' : 'rgba(34, 197, 94, 0.5)', // green-500
+                borderWidth: tpCrossed ? 3 : 2,
+                label: {
+                    content: `TP: ${formatCurrency(trade.takeProfitPrice)}`,
+                    enabled: true,
+                    position: 'end',
+                    backgroundColor: tpCrossed ? 'rgba(34, 197, 94, 0.9)' : 'rgba(34, 197, 94, 0.6)',
+                    color: 'white',
+                    font: { size: 10, weight: tpCrossed ? 'bold' : 'normal' }
+                }
+            };
+        }
+
+        if (trade.stopLossPrice) {
+            annotations.slLine = {
+                type: 'line',
+                yMin: trade.stopLossPrice,
+                yMax: trade.stopLossPrice,
+                borderColor: slCrossed ? 'rgb(239, 68, 68)' : 'rgba(239, 68, 68, 0.5)', // red-500
+                borderWidth: slCrossed ? 3 : 2,
+                label: {
+                    content: `SL: ${formatCurrency(trade.stopLossPrice)}`,
+                    enabled: true,
+                    position: 'end',
+                    backgroundColor: slCrossed ? 'rgba(239, 68, 68, 0.9)' : 'rgba(239, 68, 68, 0.6)',
+                    color: 'white',
+                    font: { size: 10, weight: slCrossed ? 'bold' : 'normal' }
+                }
+            };
+        }
+
         chartInstanceRef.current = new window.Chart(ctx, {
           type: 'line',
           data: {
@@ -84,20 +207,22 @@ export const CryptoChartModal: React.FC<CryptoChartModalProps> = ({ coin, onClos
                 backgroundColor: '#1f2937', // gray-800
                 titleColor: '#f9fafb', // gray-50
                 bodyColor: '#d1d5db', // gray-300
-                displayColors: false, // Hides the color box for a cleaner look
+                footerColor: '#9ca3af', // gray-400
+                displayColors: false,
+                padding: 10,
                 callbacks: {
-                  label: (context: any) => {
-                    let label = 'Price:';
-                    if (context.parsed.y !== null) {
-                      label = `Price: ${new Intl.NumberFormat('en-US', {
-                        style: 'currency',
-                        currency: 'USD',
-                      }).format(context.parsed.y)}`;
-                    }
-                    return label;
-                  },
+                  label: (context: any) => `Price: ${formatCurrency(context.parsed.y)}`,
+                  afterBody: () => [
+                    '', // Spacer
+                    `Entry: ${formatCurrency(trade.entryPrice)}`,
+                    `TP:    ${formatCurrency(trade.takeProfitPrice)}`,
+                    `SL:    ${formatCurrency(trade.stopLossPrice)}`,
+                  ],
                 },
               },
+              annotation: {
+                annotations: annotations
+              }
             },
           },
         });
@@ -108,7 +233,7 @@ export const CryptoChartModal: React.FC<CryptoChartModalProps> = ({ coin, onClos
         chartInstanceRef.current.destroy();
       }
     };
-  }, [chartData, coin.symbol]);
+  }, [chartData, coin.symbol, trade]);
 
   const timeframes: Timeframe[] = ['24h', '7d', '30d', '1y'];
   
@@ -121,7 +246,7 @@ export const CryptoChartModal: React.FC<CryptoChartModalProps> = ({ coin, onClos
       onClick={onClose}
     >
       <div 
-        className="w-full max-w-3xl h-[60vh] bg-gray-900 border border-gray-700 rounded-lg shadow-2xl flex flex-col animate-fade-in"
+        className="w-full max-w-4xl h-[70vh] bg-gray-900 border border-gray-700 rounded-lg shadow-2xl flex flex-col animate-fade-in"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-4 flex justify-between items-center border-b border-gray-700 flex-shrink-0">
@@ -129,7 +254,7 @@ export const CryptoChartModal: React.FC<CryptoChartModalProps> = ({ coin, onClos
             <div className="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center font-bold text-purple-400 text-sm">
                 {coin.symbol.charAt(0)}
             </div>
-            <h2 id="chart-title" className="text-xl font-semibold text-white">{coin.name} ({coin.symbol}) Price Chart</h2>
+            <h2 id="chart-title" className="text-xl font-semibold text-white">{coin.name} ({coin.symbol}) Trade Analysis</h2>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-white" aria-label="Close chart modal">
             <CloseIcon />
