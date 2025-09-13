@@ -1,4 +1,3 @@
-
 import { build } from "esbuild";
 
 export interface CryptoPrice {
@@ -48,20 +47,8 @@ const buildStorageUrl = (path: string): string => {
 };
 
 
-// Explicitly use the user-provided URL and convert it to the correct CSV format.
-const USER_PROVIDED_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSc5lzT8YRDvyb1vqo0NiDD6xvp5tbffuPToSSi_P-a-F8J_AA0nrkpWzXii_1b_hbKydqdmOnRST0p/pubhtml';
-const LIVE_PRICING_URL = USER_PROVIDED_URL.replace('/pubhtml', '/pub?output=csv');
-
 const COINGECKO_API_KEY = 'CG-NvkZx9oodFdjaz1zB3Z2t4Zj';
 const COINGECKO_FALLBACK_URL = 'https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=50&page=1&sparkline=false';
-
-// An updated and expanded list of CORS proxies to try in sequence for better reliability.
-const PROXY_URLS = [
-    (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-    (url: string) => `https://thingproxy.freeboard.io/fetch/${url}`,
-    (url: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-    (url: string) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
-];
 
 // In-memory "database" to act as a cache for the live data feed.
 const cryptoDataStore: { [key: string]: CryptoPrice } = {};
@@ -78,122 +65,6 @@ const staticFallbackData: CryptoPrice[] = [
     { id: 'chainlink', symbol: 'LINK', name: 'Chainlink', price: 14.20, change24h: -2.30, marketCap: 8000000000 },
     { id: 'polkadot', symbol: 'DOT', name: 'Polkadot', price: 5.90, change24h: 1.10, marketCap: 8200000000 },
 ];
-
-
-/**
- * Tries to fetch a URL using a list of CORS proxies until one succeeds.
- */
-const fetchWithProxyFallbacks = async (targetUrl: string): Promise<Response> => {
-    let lastError: Error | null = null;
-    for (const buildProxyUrl of PROXY_URLS) {
-        const proxyUrl = buildProxyUrl(targetUrl);
-        try {
-            const proxyName = new URL(proxyUrl).hostname;
-            console.log(`Attempting fetch via proxy: ${proxyName}...`);
-            const response = await fetch(proxyUrl, {
-                method: 'GET',
-                cache: 'no-store',
-                redirect: 'follow',
-            });
-            if (response.ok) {
-                console.log(`Proxy ${proxyName} succeeded.`);
-                return response; // Success!
-            }
-            lastError = new Error(`Proxy ${proxyName} returned a non-OK status: ${response.status} ${response.statusText}`);
-            console.warn(lastError.message);
-        } catch (error) {
-            lastError = error instanceof Error ? error : new Error(String(error));
-            const proxyName = new URL(proxyUrl).hostname;
-            console.warn(`Proxy ${proxyName} failed to fetch:`, lastError.message);
-        }
-    }
-    // If the loop completes, all proxies have failed.
-    throw new Error(`All CORS proxies failed. Last error: ${lastError?.message || 'Unknown error'}`);
-};
-
-
-/**
- * Fetches live pricing data from the Google Sheet via CORS proxies.
- * This is now a secondary data source due to unreliability.
- */
-const fetchFromGoogleSheet = async (): Promise<CryptoPrice[]> => {
-    console.log("Attempting to fetch live pricing from secondary source (Google Sheet)...");
-    
-    const targetUrl = `${LIVE_PRICING_URL}&t=${new Date().getTime()}`;
-    const response = await fetchWithProxyFallbacks(targetUrl);
-
-    let csvText = await response.text();
-    
-    if (!csvText || !csvText.includes('CoinGecko ID')) {
-      throw new Error("Invalid or non-CSV content received from Google Sheet.");
-    }
-
-    if (csvText.charCodeAt(0) === 0xFEFF) {
-        csvText = csvText.substring(1);
-    }
-    
-    const lines = csvText.trim().split(/\r?\n/).filter(line => line);
-    
-    if (lines.length < 2) {
-      throw new Error("CSV data is empty or has no content rows.");
-    }
-
-    const headers = lines[0].split(',').map(h => h.trim());
-    
-    const headerMapping = {
-        id: 'CoinGecko ID',
-        symbol: 'Symbol',
-        name: 'Name',
-        price: 'Current Price (USD)',
-        change24h: '24h Change %',
-        marketCap: 'Market Cap (USD)',
-    };
-    
-    const idIndex = headers.indexOf(headerMapping.id);
-    const symbolIndex = headers.indexOf(headerMapping.symbol);
-    const nameIndex = headers.indexOf(headerMapping.name);
-    const priceIndex = headers.indexOf(headerMapping.price);
-    const change24hIndex = headers.indexOf(headerMapping.change24h);
-    const marketCapIndex = headers.indexOf(headerMapping.marketCap);
-
-    if ([idIndex, symbolIndex, nameIndex, priceIndex, change24hIndex].includes(-1)) {
-        const missing = Object.values(headerMapping).filter(h => !headers.includes(h) && h !== headerMapping.marketCap);
-        throw new Error(`CSV is missing required headers: [${missing.join(', ')}].`);
-    }
-
-    const prices = lines.slice(1).map((line): CryptoPrice | null => {
-        const values = line.split(',').map(v => v.trim());
-        if (values.length < headers.length) return null;
-
-        const id = values[idIndex];
-        const priceStr = values[priceIndex].replace(/[$,]/g, '');
-        const changeStr = values[change24hIndex].replace('%', '');
-        const marketCapStr = marketCapIndex !== -1 ? values[marketCapIndex]?.replace(/[$,]/g, '') : undefined;
-        
-        const priceVal = parseFloat(priceStr);
-        const changeVal = parseFloat(changeStr);
-        const marketCapVal = marketCapStr ? parseFloat(marketCapStr) : undefined;
-        
-        if (!id || isNaN(priceVal) || isNaN(changeVal)) return null;
-
-        return {
-            id,
-            symbol: values[symbolIndex],
-            name: values[nameIndex],
-            price: priceVal,
-            change24h: changeVal,
-            marketCap: marketCapVal && !isNaN(marketCapVal) ? marketCapVal : undefined,
-        };
-    }).filter((p): p is CryptoPrice => p !== null);
-
-    if (prices.length === 0) {
-      throw new Error("CSV parsing resulted in zero valid price entries.");
-    }
-    
-    console.log("Successfully fetched and parsed data from secondary source (Google Sheet).");
-    return prices;
-};
-
 
 /**
  * Fetches live pricing data from the CoinGecko API.
@@ -233,8 +104,7 @@ const fetchFromCoinGecko = async (): Promise<CryptoPrice[]> => {
 
 /**
  * Main function to fetch live pricing data.
- * It first tries the reliable CoinGecko API. If that fails, it falls back
- * to the less reliable Google Sheet method. If both fail, it returns
+ * It tries the reliable CoinGecko API. If that fails, it returns
  * the last known cached data or a static fallback.
  */
 export const fetchLivePricing = async (): Promise<CryptoPrice[]> => {
@@ -248,28 +118,14 @@ export const fetchLivePricing = async (): Promise<CryptoPrice[]> => {
     return prices;
 
   } catch (primaryError) {
-    console.warn("Primary fetch (CoinGecko) failed:", primaryError);
-    console.log("Attempting fallback to Google Sheet...");
-    
-    try {
-        const sheetPrices = await fetchFromGoogleSheet();
-        console.log("Successfully fetched data from fallback source (Google Sheet).");
-
-        // Update cache with fresh data from fallback
-        Object.keys(cryptoDataStore).forEach(key => delete cryptoDataStore[key]);
-        sheetPrices.forEach(price => { cryptoDataStore[price.id] = price; });
-        return sheetPrices;
-
-    } catch (fallbackError) {
-        console.error("Fallback fetch (Google Sheet) also failed:", fallbackError);
-        const cachedData = Object.values(cryptoDataStore);
-        if (cachedData.length > 0) {
-            console.log("Returning cached data as a last resort.");
-            return cachedData;
-        } else {
-            console.warn("Cache is empty. Returning static fallback data. App will have limited functionality.");
-            return staticFallbackData;
-        }
+    console.error("Primary data fetch (CoinGecko) failed:", primaryError);
+    const cachedData = Object.values(cryptoDataStore);
+    if (cachedData.length > 0) {
+        console.log("Returning cached data as a fallback.");
+        return cachedData;
+    } else {
+        console.warn("Cache is empty. Returning static fallback data. App will have limited functionality.");
+        return staticFallbackData;
     }
   }
 };

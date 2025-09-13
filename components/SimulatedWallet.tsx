@@ -251,6 +251,7 @@ const ClosedTradeCard: React.FC<{
                     <div><span className="text-gray-400">Reason:</span> <CloseReasonPill reason={trade.closeReason} /></div>
                     <div><span className="text-gray-400">Entry:</span> <span className="font-mono text-white">{formatCurrency(trade.entryPrice)}</span></div>
                     <div><span className="text-gray-400">Close:</span> <span className="font-mono text-white">{formatCurrency(trade.closePrice)}</span></div>
+                    <div className="col-span-2"><span className="text-gray-400">Hold Time:</span> <span className="font-mono text-white">{formatDuration(trade.closeTimestamp ? trade.closeTimestamp - trade.openTimestamp : null)}</span></div>
                 </div>
             </div>
             <div className="p-2 bg-gray-800/50 border-t border-gray-700/50 flex items-center justify-end">

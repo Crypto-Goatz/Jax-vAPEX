@@ -104,7 +104,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ allCoins }) => {
         console.error("Idea is missing a symbol, cannot generate chart.");
         return;
     }
-    const coinSymbol = idea.symbol.split('/')[0].toUpperCase();
+    // FIX: More robust symbol parsing to handle "BTC/USDT", "BTC-USD", "BTC", etc.
+    const coinSymbol = idea.symbol.replace(/[\/-].*$/, '').toUpperCase();
     const coin = allCoins.find(c => c.symbol.toUpperCase() === coinSymbol);
 
     if (!coin) {
@@ -113,10 +114,20 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ allCoins }) => {
         return;
     }
 
-    // Bug Fix: Correctly calculate midpoint of entry price, handling nulls.
-    const entryLow = idea.entry_low ?? idea.entry_high ?? 0;
-    const entryHigh = idea.entry_high ?? idea.entry_low ?? 0;
-    const entryPrice = (entryLow + entryHigh) / 2;
+    // REFACTOR: Clearer entry price calculation with a fallback.
+    let entryPrice: number;
+    const { entry_low, entry_high } = idea;
+    if (entry_low != null && entry_high != null) {
+        entryPrice = (entry_low + entry_high) / 2;
+    } else {
+        entryPrice = entry_low ?? entry_high ?? 0;
+    }
+
+    // If both entry points were null, entryPrice is 0. Use current price as a better fallback for charting.
+    if (entryPrice === 0) {
+        console.warn("Calculated entry price is 0, using current price as fallback for chart.");
+        entryPrice = coin.price;
+    }
     
     // Enhancement: Determine a relevant timeframe based on hold duration.
     let determinedTimeframe: Timeframe = '30d';
@@ -132,12 +143,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ allCoins }) => {
         }
     }
 
-
     const tradeShim: Trade = {
         id: `idea-${Date.now()}`,
         coin: coin,
-        direction: 'buy',
-        entryPrice: entryPrice, // Use corrected price
+        direction: 'buy', // Ideas are implicitly long for now
+        entryPrice: entryPrice,
         takeProfitPrice: idea.target1 ?? undefined,
         stopLossPrice: idea.stop ?? undefined,
         status: 'open',

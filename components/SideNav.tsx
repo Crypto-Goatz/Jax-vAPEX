@@ -1,5 +1,5 @@
 import React from 'react';
-import { CloseIcon, ChartBarIcon, DatabaseIcon, PipelineIcon, LineChartIcon, ChatBubbleIcon, WalletIcon, RewindIcon } from './Icons';
+import { CloseIcon, ChartBarIcon, DatabaseIcon, PipelineIcon, LineChartIcon, ChatBubbleIcon, WalletIcon, RewindIcon, LightbulbIcon, BeakerIcon, BellIcon } from './Icons';
 import type { ActiveView } from '../App';
 import { Logo } from './Logo';
 
@@ -67,26 +67,13 @@ export const SideNav: React.FC<SideNavProps> = ({ isOpen, onClose, activeView, s
           </button>
 
           <nav className="space-y-2 border-t border-gray-700/60 pt-4">
+            <h3 className="px-3 pt-2 pb-1 text-xs font-semibold text-gray-500 uppercase">Analysis</h3>
             <button
               onClick={() => setActiveView('pipeline')}
               className={`${navButtonClasses} ${activeView === 'pipeline' ? activeButtonClasses : ''}`}
             >
               <PipelineIcon />
               <span>Pump Pipeline</span>
-            </button>
-            <button
-              onClick={() => setActiveView('wallet')}
-              className={`${navButtonClasses} ${activeView === 'wallet' ? activeButtonClasses : ''}`}
-            >
-              <WalletIcon />
-              <span>Simulated Wallet</span>
-            </button>
-            <button
-              onClick={() => setActiveView('trends')}
-              className={`${navButtonClasses} ${activeView === 'trends' ? activeButtonClasses : ''}`}
-            >
-              <LineChartIcon />
-              <span>Market Trends</span>
             </button>
              <button
               onClick={() => setActiveView('pricing')}
@@ -96,12 +83,51 @@ export const SideNav: React.FC<SideNavProps> = ({ isOpen, onClose, activeView, s
               <span>SpotLive</span>
             </button>
             <button
+              onClick={() => setActiveView('trends')}
+              className={`${navButtonClasses} ${activeView === 'trends' ? activeButtonClasses : ''}`}
+            >
+              <LineChartIcon />
+              <span>Market Trends</span>
+            </button>
+            <button
               onClick={() => setActiveView('rewind')}
               className={`${navButtonClasses} ${activeView === 'rewind' ? activeButtonClasses : ''}`}
             >
               <RewindIcon />
               <span>Market Rewind</span>
             </button>
+
+            <h3 className="px-3 pt-4 pb-1 text-xs font-semibold text-gray-500 uppercase">AI Core</h3>
+            <button
+              onClick={() => setActiveView('learning')}
+              className={`${navButtonClasses} ${activeView === 'learning' ? activeButtonClasses : ''}`}
+            >
+              <LightbulbIcon />
+              <span>Active Learning</span>
+            </button>
+            <button
+              onClick={() => setActiveView('experiments')}
+              className={`${navButtonClasses} ${activeView === 'experiments' ? activeButtonClasses : ''}`}
+            >
+              <BeakerIcon />
+              <span>Experiments</span>
+            </button>
+             <button
+              onClick={() => setActiveView('signals')}
+              className={`${navButtonClasses} ${activeView === 'signals' ? activeButtonClasses : ''}`}
+            >
+              <BellIcon />
+              <span>Jax Signals</span>
+            </button>
+             <button
+              onClick={() => setActiveView('wallet')}
+              className={`${navButtonClasses} ${activeView === 'wallet' ? activeButtonClasses : ''}`}
+            >
+              <WalletIcon />
+              <span>Simulated Wallet</span>
+            </button>
+
+             <h3 className="px-3 pt-4 pb-1 text-xs font-semibold text-gray-500 uppercase">System</h3>
             <button
               onClick={() => setActiveView('data')}
               className={`${navButtonClasses} ${activeView === 'data' ? activeButtonClasses : ''}`}

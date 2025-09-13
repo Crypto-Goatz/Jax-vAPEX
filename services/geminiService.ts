@@ -1,242 +1,274 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { SYSTEM_INSTRUCTION } from '../constants';
-
-if (!process.env.API_KEY) {
-    throw new Error("API_KEY environment variable not set");
-}
-
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
-const responseSchema = {
-    type: Type.OBJECT,
-    properties: {
-        type: { 
-            type: Type.STRING, 
-            enum: ['idea', 'signal', 'health', 'text'],
-        },
-        payload: {
-            type: Type.OBJECT,
-            properties: {
-                // Text
-                text: { type: Type.STRING, nullable: true },
-                // Idea
-                symbol: { type: Type.STRING, nullable: true },
-                strategy: { type: Type.STRING, nullable: true },
-                entry_low: { type: Type.NUMBER, nullable: true },
-                entry_high: { type: Type.NUMBER, nullable: true },
-                stop: { type: Type.NUMBER, nullable: true },
-                target1: { type: Type.NUMBER, nullable: true },
-                target2: { type: Type.NUMBER, nullable: true },
-                confidence: { type: Type.NUMBER, nullable: true },
-                hold_minutes: { type: Type.NUMBER, nullable: true },
-                rationale: { type: Type.ARRAY, items: { type: Type.STRING }, nullable: true },
-                // Signal
-                ts: { type: Type.STRING, nullable: true },
-                side: { type: Type.STRING, enum: ['long', 'short'], nullable: true },
-                score: { type: Type.NUMBER, nullable: true },
-                features_used: { type: Type.ARRAY, items: { type: Type.STRING }, nullable: true },
-                // Health
-                ingest_ok: { type: Type.BOOLEAN, nullable: true },
-                last_tick_ts: { type: Type.STRING, nullable: true },
-                sources_ok: { type: Type.ARRAY, items: { type: Type.STRING }, nullable: true },
-            }
-        },
-        context: {
-            type: Type.OBJECT,
-            nullable: true,
-            properties: {
-                symbol: { type: Type.STRING, nullable: true },
-                narrative: { type: Type.STRING, nullable: true },
-                posts: {
-                    type: Type.ARRAY,
-                    nullable: true,
-                    items: {
-                        type: Type.OBJECT,
-                        properties: {
-                            platform: { type: Type.STRING, enum: ['X', 'Other'], nullable: true },
-                            user: { type: Type.STRING, nullable: true },
-                            handle: { type: Type.STRING, nullable: true },
-                            content: { type: Type.STRING, nullable: true },
-                            url: { type: Type.STRING, nullable: true },
-                            avatarUrl: { type: Type.STRING, nullable: true },
-                        }
-                    }
-                }
-            }
-        }
-    },
-    required: ['type', 'payload']
-};
+import type { LearningPattern } from './learningService';
+import type { AvailableSignal } from './signalsService';
+import type { BtcHistoryEntry } from './btcHistoryService';
 
 
-export async function runChat(prompt: string): Promise<string> {
+// Fix: Initialize GoogleGenAI with named apiKey parameter
+const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
+
+/**
+ * Sends a prompt to the Gemini model with the predefined system instruction.
+ * @param prompt The user's message.
+ * @returns A string containing the model's response, expected to be a JSON string.
+ */
+export const runChat = async (prompt: string): Promise<string> => {
     try {
+        // Fix: Use ai.models.generateContent with correct parameters
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            // Fix: Use gemini-2.5-flash model
+            model: "gemini-2.5-flash",
             contents: prompt,
             config: {
                 systemInstruction: SYSTEM_INSTRUCTION,
-                responseMimeType: 'application/json',
-                responseSchema: responseSchema,
-            }
+            },
         });
+        // Fix: Return text directly from the response
         return response.text;
     } catch (error) {
-        console.error("Error calling Gemini API:", error);
-        if (error instanceof Error) {
-            // Return a JSON structure for the error so the UI can handle it gracefully
-            return JSON.stringify({
-                type: 'text',
-                payload: {
-                    text: `Error: ${error.message}. Please check your API key and network connection.`
-                }
-            });
-        }
+        console.error("Gemini API call failed in runChat:", error);
+        // Fallback to a structured error message that the frontend can parse
         return JSON.stringify({
             type: 'text',
             payload: {
-                text: "An unknown error occurred while contacting the AI model."
+                text: "Sorry, I encountered an error connecting to the AI. Please try again."
             }
         });
     }
-}
-
-// Schema for the Market Narratives Dashboard
-const marketNarrativesSchema = {
-  type: Type.OBJECT,
-  properties: {
-    narratives: {
-      type: Type.ARRAY,
-      description: 'A list of 3-4 current, distinct market narratives.',
-      items: {
-        type: Type.OBJECT,
-        properties: {
-          title: { type: Type.STRING, description: 'A catchy headline for the narrative.' },
-          summary: { type: Type.STRING, description: 'A 2-3 sentence summary explaining the narrative.' },
-          pipeline_stage: { type: Type.STRING, enum: ['Watchlist', 'Signal', 'Spot', 'Hold', 'Exit'], description: 'The pipeline stage this narrative most relates to.' },
-          timestamp: { type: Type.STRING, description: 'The ISO 8601 timestamp of when this narrative was identified.' },
-          key_indicators: {
-            type: Type.ARRAY,
-            description: 'A list of 2-3 simulated data points supporting the narrative.',
-            items: { type: Type.STRING },
-          },
-          affected_assets: {
-            type: Type.ARRAY,
-            description: 'A list of 3-5 crypto symbols (e.g., BTC, ETH) affected by this narrative.',
-            items: { type: Type.STRING },
-          },
-        },
-        required: ['title', 'summary', 'pipeline_stage', 'key_indicators', 'affected_assets', 'timestamp'],
-      },
-    },
-    market_movers_commentary: {
-        type: Type.ARRAY,
-        description: "A list of short, plausible reasons for the top 5 gainers and top 5 losers' recent price action, often linking back to the generated narratives.",
-        items: {
-            type: Type.OBJECT,
-            properties: {
-                symbol: { type: Type.STRING, description: 'The crypto symbol (e.g., BTC).' },
-                comment: { type: Type.STRING, description: 'A brief, one-sentence comment explaining the price movement.' },
-            },
-            required: ['symbol', 'comment'],
-        }
-    }
-  },
-  required: ['narratives', 'market_movers_commentary'],
 };
 
-export async function getMarketNarratives(): Promise<any> {
-    const prompt = `You are a senior crypto market analyst AI. Your task is to synthesize information from a wide range of simulated data sources to identify the key narratives driving the market right now.
-
-    Simulate the output of this 5-stage intelligence pipeline:
-    - Stage 1 (Watchlist): Filtering top coins by market cap, volume, and TVL.
-    - Stage 2 (Signal): Analyzing on-chain data (whale transfers), derivatives (funding rates), and social sentiment (Lunar score).
-    - Stage 3 (Spot): Detecting buy signals from order book imbalances and liquidity surges.
-    - Stage 4 (Hold): Monitoring news and momentum for ongoing trades.
-    - Stage 5 (Exit): Identifying sell triggers from whale dumps or negative sentiment flips.
-
-    Based on your simulated analysis of these stages, generate 3-4 distinct, currently active "market narratives". For each narrative, provide a title, a summary, the most relevant pipeline stage, key data indicators (be specific, e.g., "Whale inflows detected for LINK", "Funding rates for SOL flipping negative"), the assets it affects, and the current ISO 8601 timestamp for when the narrative was generated.
-
-    Additionally, provide a brief, plausible "Jax-Comment" for a list of top market movers, linking their performance to these narratives where possible.
-
-    Respond strictly with a JSON object matching the required schema.`;
-
+/**
+ * Asks the Gemini model to generate current market narratives and commentary.
+ * @returns A structured object with narratives and market mover comments.
+ */
+export const getMarketNarratives = async (): Promise<{ narratives: any[], market_movers_commentary: any[] }> => {
     try {
+        const prompt = `Analyze the current crypto market based on real-time data. Identify 3-5 key emerging narratives driving price action. For each narrative, provide a title, a concise summary, the relevant pipeline stage (e.g., "Watchlist", "Signal", "Spot"), key indicators, a list of affected asset symbols, and a current ISO 8601 timestamp. Also, provide brief commentary for the top 3 market gainers and top 3 losers in the last 24 hours.`;
+
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            // Fix: Use gemini-2.5-flash model
+            model: "gemini-2.5-flash",
             contents: prompt,
             config: {
-                responseMimeType: 'application/json',
-                responseSchema: marketNarrativesSchema,
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        narratives: {
+                            type: Type.ARRAY,
+                            items: {
+                                type: Type.OBJECT,
+                                properties: {
+                                    title: { type: Type.STRING },
+                                    summary: { type: Type.STRING },
+                                    pipeline_stage: { type: Type.STRING },
+                                    key_indicators: { type: Type.ARRAY, items: { type: Type.STRING } },
+                                    affected_assets: { type: Type.ARRAY, items: { type: Type.STRING } },
+                                    timestamp: { type: Type.STRING, description: "ISO 8601 timestamp" }
+                                },
+                                required: ["title", "summary", "pipeline_stage", "key_indicators", "affected_assets", "timestamp"]
+                            }
+                        },
+                        market_movers_commentary: {
+                             type: Type.ARRAY,
+                             items: {
+                                 type: Type.OBJECT,
+                                 properties: {
+                                     symbol: { type: Type.STRING },
+                                     comment: { type: Type.STRING }
+                                 },
+                                 required: ["symbol", "comment"]
+                             }
+                        }
+                    },
+                    required: ["narratives", "market_movers_commentary"]
+                }
             }
         });
-        const jsonString = response.text;
-        return JSON.parse(jsonString);
-    } catch (error) {
-        console.error("Error fetching Market Narratives from Gemini API:", error);
-        throw new Error("Failed to fetch AI-generated market narratives.");
-    }
-}
 
-// Schema for the Historical Events (Market Rewind)
-const historicalEventsSchema = {
-    type: Type.OBJECT,
-    properties: {
-        analysisSummary: {
-            type: Type.STRING,
-            description: "A 2-4 sentence narrative summary explaining the market sentiment and key drivers for the specified date, connecting the events to potential price action."
-        },
-        events: {
-            type: Type.ARRAY,
-            description: "A list of 3-5 significant, plausible events that occurred on or around the specified date.",
-            items: {
-                type: Type.OBJECT,
-                properties: {
-                    category: {
-                        type: Type.STRING,
-                        enum: ['News & Narrative', 'Economic', 'On-Chain & Technical', 'Social & Community'],
-                        description: "The category of the event."
+        const jsonString = response.text.trim();
+        return JSON.parse(jsonString);
+
+    } catch (error) {
+        console.error("Gemini API call failed in getMarketNarratives:", error);
+        throw new Error("Failed to get market narratives from the AI.");
+    }
+};
+
+/**
+ * Asks the Gemini model to identify new, actionable trading patterns.
+ * @returns A structured object containing a list of learning patterns.
+ */
+export const getLearningPatterns = async (): Promise<{ patterns: LearningPattern[] }> => {
+    try {
+        const prompt = `Analyze historical and real-time market data to identify 3-5 novel, actionable trading patterns. These can include Price Correlation, Sentiment Indicator, On-Chain Anomaly, Derivatives Signal, or Inter-Asset Lag. For each pattern, provide a unique ID (uuid format), title, description, category, confidence score (0-100), observation count, the trigger asset symbol, the affected asset symbol, and the resulting trade direction ('buy' or 'sell').`;
+
+        const response = await ai.models.generateContent({
+            // Fix: Use gemini-2.5-flash model
+            model: "gemini-2.5-flash",
+            contents: prompt,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        patterns: {
+                            type: Type.ARRAY,
+                            items: {
+                                type: Type.OBJECT,
+                                properties: {
+                                    id: { type: Type.STRING },
+                                    title: { type: Type.STRING },
+                                    description: { type: Type.STRING },
+                                    category: { type: Type.STRING },
+                                    confidence: { type: Type.NUMBER },
+                                    observation_count: { type: Type.INTEGER },
+                                    trigger_asset: { type: Type.STRING },
+                                    affected_asset: { type: Type.STRING },
+                                    trade_direction: { type: Type.STRING, enum: ['buy', 'sell'] }
+                                },
+                                required: ["id", "title", "description", "category", "confidence", "observation_count", "trigger_asset", "affected_asset", "trade_direction"]
+                            }
+                        }
                     },
-                    title: {
-                        type: Type.STRING,
-                        description: "A concise, headline-style title for the event."
-                    },
-                    description: {
-                        type: Type.STRING,
-                        description: "A one-sentence summary of the event's significance."
-                    }
-                },
-                required: ['category', 'title', 'description']
+                    required: ["patterns"]
+                }
             }
-        }
-    },
-    required: ['analysisSummary', 'events']
+        });
+
+        const jsonString = response.text.trim();
+        return JSON.parse(jsonString);
+
+    } catch (error) {
+        console.error("Gemini API call failed in getLearningPatterns:", error);
+        throw new Error("Failed to get learning patterns from the AI.");
+    }
 };
 
 
-export async function getHistoricalEvents(date: string): Promise<any> {
-    const prompt = `You are JaxSpot, an expert crypto market historian. Your task is to analyze the market conditions for Bitcoin (BTC) on the specific date: ${date}.
-
-    Based on your knowledge of historical events, generate a plausible and informative summary for that day.
-    1.  Provide a 2-4 sentence "Analysis Summary" that captures the overall market sentiment and connects the day's events to the likely price action.
-    2.  Generate a list of 3-5 of the most significant and relevant events that occurred on or around that date. These events should be things that could realistically impact the crypto market.
-    3.  Categorize each event into one of four categories: 'News & Narrative', 'Economic', 'On-Chain & Technical', or 'Social & Community'.
-
-    Respond strictly with a JSON object that matches the required schema. Ensure the events are diverse and reflect the multifaceted nature of the crypto market.`;
-
+/**
+ * Uses the Gemini model to perform a smart search on available signals.
+ * @param query The user's natural language search query.
+ * @param signals A list of available signals to search through.
+ * @returns An array of signal IDs that match the query.
+ */
+export const getSmartSignalSearch = async (query: string, signals: AvailableSignal[]): Promise<string[]> => {
     try {
+        const prompt = `
+        From the following list of available signals, return a JSON array of signal IDs that are most relevant to the user's search query.
+        User Query: "${query}"
+
+        Available Signals:
+        ${JSON.stringify(signals, null, 2)}
+
+        Analyze the query's intent (e.g., specific assets, market conditions, signal types) and match it against the signal titles, descriptions, and assets. Return only the array of matching IDs. If no signals match, return an empty array.
+        `;
+
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            // Fix: Use gemini-2.5-flash model
+            model: "gemini-2.5-flash",
             contents: prompt,
             config: {
-                responseMimeType: 'application/json',
-                responseSchema: historicalEventsSchema,
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.ARRAY,
+                    items: { type: Type.STRING }
+                }
             }
         });
-        const jsonString = response.text;
+
+        const jsonString = response.text.trim();
         return JSON.parse(jsonString);
+
     } catch (error) {
-        console.error("Error fetching Historical Events from Gemini API:", error);
-        throw new Error("Failed to fetch AI-generated historical analysis.");
+        console.error("Gemini API call failed in getSmartSignalSearch:", error);
+        throw new Error("Failed to perform smart search with the AI.");
     }
-}
+};
+
+/**
+ * Asks the Gemini model to refine a failed trading pattern.
+ * @param pattern The failed learning pattern.
+ * @param pnl The resulting P/L from the failed experiment.
+ * @returns A string containing the AI's suggestion for a refined pattern.
+ */
+export const getRefinedPattern = async (pattern: LearningPattern, pnl: number): Promise<string> => {
+    try {
+        const prompt = `
+        As an expert AI trading strategist, analyze the following trading pattern that failed when tested.
+        The experiment resulted in a P/L of ${pnl.toFixed(2)} USD.
+
+        Failed Pattern Details:
+        - Title: "${pattern.title}"
+        - Category: ${pattern.category}
+        - Hypothesis: "${pattern.description}"
+        - Trigger Asset: ${pattern.trigger_asset}
+        - Affected Asset: ${pattern.affected_asset}
+        - Direction: ${pattern.trade_direction}
+        - AI Confidence: ${pattern.confidence}%
+
+        Your task is to propose a refined, more robust version of this pattern.
+        1.  Identify potential flaws. Was it too simple? Did it miss a key confirmation indicator (e.g., volume, volatility, another asset's movement)?
+        2.  Suggest 1-2 specific, additional conditions to add to the hypothesis to improve its accuracy. Examples: "AND BTC volume is above the 24h average" or "AND DXY is trending downwards".
+        3.  Provide a new, improved "description" for the refined pattern.
+        4.  Keep the response concise and actionable.
+        `;
+
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: prompt,
+        });
+
+        return response.text;
+
+    } catch (error) {
+        console.error("Gemini API call failed in getRefinedPattern:", error);
+        return "Could not get a refined pattern from the AI due to an error.";
+    }
+};
+
+/**
+ * Asks the Gemini model to analyze a slice of historical BTC data to find patterns.
+ * @param dataSlice A slice of historical data.
+ * @param selectedDate The target date of the major event.
+ * @param eventType The type of event that occurred on the target date.
+ * @returns A string containing the AI's analysis in markdown format.
+ */
+export const analyzeBtcPatterns = async (dataSlice: BtcHistoryEntry[], selectedDate: string, eventType: string): Promise<string> => {
+    try {
+        const formattedData = dataSlice.map(d => 
+            `Date: ${d.date}, Price: ${d.price.toFixed(2)}, Change: ${d.dailyChange.toFixed(2)}%, Volatility: ${d.volatility.toFixed(2)}%, Event: ${d.eventType}, Intensity: ${d.intensityScore}`
+        ).join('\n');
+        
+        const prompt = `
+        You are an expert crypto market analyst. I will provide you with a slice of historical Bitcoin data.
+        Your task is to analyze this data to find patterns or precursors leading up to the significant market event on ${selectedDate}.
+
+        The event on ${selectedDate} was: "${eventType}".
+
+        Historical Data Slice:
+        ---
+        ${formattedData}
+        ---
+
+        Based on the data provided, please answer the following:
+        1.  **Pattern Identification:** In the 3-7 days before ${selectedDate}, were there any notable trends in volatility, price action, or smaller events that might have predicted the main event?
+        2.  **Contextual Analysis:** Provide a brief, insightful narrative explaining how these preceding factors could have contributed to the event on ${selectedDate}.
+        3.  **Key Takeaway:** Summarize your finding into a single, actionable takeaway for a trader.
+
+        Keep your analysis concise and focused only on the data provided. Respond in simple markdown format, using '**' for bolding.
+        `;
+
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: prompt,
+        });
+
+        return response.text;
+
+    } catch (error) {
+        console.error("Gemini API call failed in analyzeBtcPatterns:", error);
+        return "Sorry, the AI analysis failed. Please try again later.";
+    }
+};
