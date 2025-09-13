@@ -162,6 +162,11 @@ const ActiveMonitor: React.FC<{ coin: CryptoPrice | null }> = React.memo(({ coin
                     <div className="text-right">
                         <p className={`text-2xl font-mono font-bold transition-colors duration-300 ${priceColor}`}>{formatCurrency(coin.price)}</p>
                         <p className={`text-sm font-semibold ${isUp ? 'text-green-400' : 'text-red-400'}`}>{isUp ? '+' : ''}{coin.change24h.toFixed(2)}% (24h)</p>
+                        {coin.marketCap && (
+                            <p className="text-xs text-gray-400 mt-1">
+                                MCap: <span className="font-semibold text-gray-300">{formatCurrency(coin.marketCap, true)}</span>
+                            </p>
+                        )}
                     </div>
                 </div>
             </div>

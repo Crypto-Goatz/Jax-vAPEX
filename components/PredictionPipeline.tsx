@@ -18,14 +18,28 @@ const formatCurrency = (value: number | null | undefined) => {
     return value.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 };
 
-const getProgressColor = (progress: number) => {
-    const coldColor = [96, 165, 250]; // Electric Blue
-    const hotColor = [251, 146, 60]; // Orange
-    const r = coldColor[0] + progress * (hotColor[0] - coldColor[0]);
-    const g = coldColor[1] + progress * (hotColor[1] - coldColor[1]);
-    const b = coldColor[2] + progress * (hotColor[2] - coldColor[2]);
-    return `rgb(${r.toFixed(0)}, ${g.toFixed(0)}, ${b.toFixed(0)})`;
+const getProgressColor = (progress: number): string => {
+    if (progress <= 0.2) return '#0055ff'; // Level 1: Blue
+    if (progress <= 0.4) return '#00aaff'; // Level 2: Cyan
+    if (progress <= 0.6) return '#00d4ff'; // Level 3: Aqua
+    if (progress <= 0.8) return '#00ffaa'; // Level 4: Mint
+    return '#aaff00'; // Level 5: Lime
 };
+
+const ColorLegend = () => (
+    <div className="mt-2 flex items-center space-x-2">
+        <span className="text-xs text-gray-400 font-semibold">Cold</span>
+        <div className="flex-grow flex items-center space-x-1">
+            <div title="0-20% Hotness" className="h-2 flex-1 rounded-full" style={{ backgroundColor: '#0055ff' }}></div>
+            <div title="21-40% Hotness" className="h-2 flex-1 rounded-full" style={{ backgroundColor: '#00aaff' }}></div>
+            <div title="41-60% Hotness" className="h-2 flex-1 rounded-full" style={{ backgroundColor: '#00d4ff' }}></div>
+            <div title="61-80% Hotness" className="h-2 flex-1 rounded-full" style={{ backgroundColor: '#00ffaa' }}></div>
+            <div title="81-100% Hotness" className="h-2 flex-1 rounded-full" style={{ backgroundColor: '#aaff00' }}></div>
+        </div>
+        <span className="text-xs text-gray-400 font-semibold">Hot</span>
+    </div>
+);
+
 
 // --- MODAL & CARDS for HOLDING STAGE ---
 
@@ -347,21 +361,24 @@ export const PredictionPipeline: React.FC<PredictionPipelineProps> = ({ pipeline
   return (
     <>
     <div className="w-full h-full flex flex-col bg-gray-800/50 rounded-lg shadow-2xl border border-gray-700 overflow-hidden">
-      <div className="p-4 border-b border-gray-700 flex justify-between items-center">
-        <div>
-            <h2 className="text-xl font-semibold text-white">JaxSpot Pump Pipeline</h2>
-            <p className="text-sm text-gray-400">Live, logic-driven analysis of potential low-risk gems.</p>
+      <div className="p-4 border-b border-gray-700">
+        <div className="flex justify-between items-center">
+            <div>
+                <h2 className="text-xl font-semibold text-white">JaxSpot Pump Pipeline</h2>
+                <p className="text-sm text-gray-400">Live, logic-driven analysis of potential low-risk gems.</p>
+            </div>
+            <button 
+                onClick={() => setIsHoldingModalOpen(true)}
+                className="flex items-center space-x-2 px-4 py-2 text-sm font-semibold text-teal-300 bg-teal-500/10 hover:bg-teal-500/20 rounded-lg transition-colors"
+            >
+                <VaultIcon />
+                <span>Recommended Holds</span>
+                <span className="bg-teal-500/50 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                    {holdingCoins.length}
+                </span>
+            </button>
         </div>
-        <button 
-            onClick={() => setIsHoldingModalOpen(true)}
-            className="flex items-center space-x-2 px-4 py-2 text-sm font-semibold text-teal-300 bg-teal-500/10 hover:bg-teal-500/20 rounded-lg transition-colors"
-        >
-            <VaultIcon />
-            <span>Recommended Holds</span>
-            <span className="bg-teal-500/50 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                {holdingCoins.length}
-            </span>
-        </button>
+        <ColorLegend />
       </div>
       <div className="flex-1 p-4 flex flex-col overflow-hidden">
         {/* Mobile Tabs */}

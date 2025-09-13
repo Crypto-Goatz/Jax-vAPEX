@@ -11,6 +11,10 @@ export interface BtcHistoryEntry {
   direction: string;
   intensityScore: number;
   status: string;
+  // --- NEW, ENRICHED FIELDS FOR FUTURE EXPANSION ---
+  event_source?: string;
+  sentiment_impact?: 'HIGH' | 'MEDIUM' | 'LOW' | 'NONE';
+  related_news_url?: string;
 }
 
 // The raw CSV data provided by the user.
@@ -654,7 +658,8 @@ class BtcHistoryService {
         
         lines.forEach(line => {
             const parts = line.match(/(?:"[^"]*"|[^,]+)/g);
-            if (parts && parts.length === 9) {
+            // Updated to handle both current and future expanded data formats
+            if (parts && parts.length >= 9) {
                 try {
                     const entry: BtcHistoryEntry = {
                         date: this.formatDate(parts[0].replace(/"/g, '')),
@@ -665,7 +670,11 @@ class BtcHistoryService {
                         eventType: parts[5],
                         direction: parts[6],
                         intensityScore: parseInt(parts[7], 10),
-                        status: parts[8]
+                        status: parts[8],
+                        // Safely parse new optional fields if they exist
+                        event_source: parts[9] ? parts[9].trim() : undefined,
+                        sentiment_impact: parts[10] ? parts[10].trim() as BtcHistoryEntry['sentiment_impact'] : undefined,
+                        related_news_url: parts[11] ? parts[11].trim() : undefined,
                     };
                     parsedData.push(entry);
                 } catch (e) {

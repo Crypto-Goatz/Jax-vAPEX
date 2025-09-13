@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import type { ChatMessage as ChatMessageType, Idea, Signal, Health, ChatContext } from '../types';
 import { runChat } from '../services/geminiService';
@@ -61,6 +62,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ allCoins }) => {
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isStrategyMode, setIsStrategyMode] = useState(false);
   const [attachedFile, setAttachedFile] = useState<DriveFile | null>(null);
   const [isDriveAuthenticated, setIsDriveAuthenticated] = useState(googleDriveService.isAuthenticated());
   const [savedPrompts, setSavedPrompts] = useState<string[]>([]);
@@ -172,10 +174,15 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ allCoins }) => {
     let fullPrompt = userMessageContent;
     let fileContent = '';
   
+    if (isStrategyMode) {
+      fullPrompt = `STRATEGY MODE ENABLED:\n${userMessageContent}`;
+    }
+
     if (attachedFile) {
       try {
         fileContent = await googleDriveService.getFileContent(attachedFile.id);
-        fullPrompt = `CONTEXT FROM FILE: ${attachedFile.name}\n\n---\n${fileContent}\n---\n\nUSER PROMPT: ${userMessageContent}`;
+        const filePromptPart = `CONTEXT FROM FILE: ${attachedFile.name}\n\n---\n${fileContent}\n---\n\nUSER PROMPT: ${userMessageContent}`;
+        fullPrompt = isStrategyMode ? `STRATEGY MODE ENABLED:\n${filePromptPart}` : filePromptPart;
       } catch (error) {
         console.error("Error fetching file content:", error);
         const errorMessage: ChatMessageType = {
@@ -383,6 +390,23 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ allCoins }) => {
                     </div>
                 </div>
 
+                <div className="flex items-center justify-end mb-2">
+                    <label htmlFor="strategy-mode-toggle" className="flex items-center cursor-pointer">
+                        <span className="mr-3 text-sm font-medium text-gray-300">Strategy Mode</span>
+                        <div className="relative">
+                            <input 
+                                type="checkbox" 
+                                id="strategy-mode-toggle" 
+                                className="sr-only" 
+                                checked={isStrategyMode}
+                                onChange={() => setIsStrategyMode(!isStrategyMode)}
+                            />
+                            <div className="block bg-gray-600 w-14 h-8 rounded-full"></div>
+                            <div className={`dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform ${isStrategyMode ? 'translate-x-6 bg-purple-400' : ''}`}></div>
+                        </div>
+                    </label>
+                </div>
+
                 <div className="flex items-center space-x-2">
                     {isDriveAuthenticated && (
                         <button
@@ -438,6 +462,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ allCoins }) => {
             initialTimeframe={initialChartTimeframe}
         />
     )}
+     <style>{`
+        .dot {
+            transition: transform 0.3s ease-in-out, background-color 0.3s ease-in-out;
+        }
+    `}</style>
     </>
   );
 };
