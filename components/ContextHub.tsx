@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { ChatContext, SocialPost } from '../types';
 import type { CryptoPrice } from '../services/cryptoService';
 import { fetchHistoricalData, HistoricalData } from '../services/cryptoService';
 import { LoadingSpinner } from './LoadingSpinner';
-import { XIcon, JaxIcon } from './Icons';
+import { XIcon, JaxIcon, PaperclipIcon, CloseIcon } from './Icons';
 
 // --- SUB-COMPONENTS ---
 
@@ -130,15 +131,121 @@ const LivePriceTicker: React.FC<{ liveCoin: CryptoPrice }> = ({ liveCoin }) => {
     );
 };
 
+// --- IMAGE UPLOAD COMPONENT ---
+const ImageUploader: React.FC<{
+    onImageUpload: (base64: string | null, mimeType: string | null) => void;
+    attachedImage: { data: string; mimeType: string } | null;
+}> = ({ onImageUpload, attachedImage }) => {
+    const [isDragging, setIsDragging] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const processFile = (file: File) => {
+        if (!file || !file.type.startsWith('image/')) {
+            alert('Please upload a valid image file.');
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const base64 = (e.target?.result as string).split(',')[1];
+            onImageUpload(base64, file.type);
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            processFile(e.target.files[0]);
+        }
+    };
+
+    const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(false);
+        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+            processFile(e.dataTransfer.files[0]);
+        }
+    }, [onImageUpload]);
+
+    const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+    }, []);
+
+    const handleDragEnter = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(true);
+    }, []);
+    
+    const handleDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(false);
+    }, []);
+
+    const handleRemoveImage = () => {
+        onImageUpload(null, null);
+        if (fileInputRef.current) {
+            fileInputRef.current.value = "";
+        }
+    };
+
+    return (
+        <div className="mb-4">
+            <h4 className="text-sm font-bold text-gray-300 mb-2">Chart Analysis</h4>
+            {attachedImage ? (
+                <div className="relative group">
+                    <img src={`data:${attachedImage.mimeType};base64,${attachedImage.data}`} alt="Uploaded chart" className="rounded-lg w-full h-auto object-contain max-h-48" />
+                    <button 
+                        onClick={handleRemoveImage}
+                        className="absolute top-2 right-2 p-1.5 bg-black/60 rounded-full text-white hover:bg-black/80 transition-opacity opacity-0 group-hover:opacity-100"
+                        aria-label="Remove image"
+                    >
+                        <CloseIcon className="w-4 h-4" />
+                    </button>
+                </div>
+            ) : (
+                <div 
+                    onDrop={handleDrop}
+                    onDragOver={handleDragOver}
+                    onDragEnter={handleDragEnter}
+                    onDragLeave={handleDragLeave}
+                    className={`relative flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-lg cursor-pointer transition-colors
+                        ${isDragging ? 'border-purple-500 bg-purple-500/10' : 'border-gray-600 hover:border-gray-500 bg-gray-800/50'}`
+                    }
+                    onClick={() => fileInputRef.current?.click()}
+                >
+                    <input
+                        type="file"
+                        ref={fileInputRef}
+                        onChange={handleFileSelect}
+                        accept="image/*"
+                        className="hidden"
+                    />
+                    <PaperclipIcon className="w-8 h-8 text-gray-500 mb-2" />
+                    <p className="text-sm text-center text-gray-400">
+                        <span className="font-semibold text-purple-400">Click to upload</span> or drag and drop
+                    </p>
+                    <p className="text-xs text-center text-gray-500">PNG, JPG, GIF up to 10MB</p>
+                </div>
+            )}
+        </div>
+    );
+};
+
 
 // --- MAIN COMPONENT ---
 
 interface ContextHubProps {
     context: ChatContext | null;
     allCoins: CryptoPrice[];
+    onImageUpload: (base64: string | null, mimeType: string | null) => void;
+    attachedImage: { data: string; mimeType: string } | null;
 }
 
-export const ContextHub: React.FC<ContextHubProps> = ({ context, allCoins }) => {
+export const ContextHub: React.FC<ContextHubProps> = ({ context, allCoins, onImageUpload, attachedImage }) => {
     
     const findCoinBySymbol = (symbol: string) => {
         const upperSymbol = symbol.toUpperCase();
@@ -154,11 +261,12 @@ export const ContextHub: React.FC<ContextHubProps> = ({ context, allCoins }) => 
                 <p className="text-sm text-gray-400">Supporting data for your conversation.</p>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                {!context ? (
-                    <div className="flex flex-col items-center justify-center h-full text-center text-gray-500">
+                <ImageUploader onImageUpload={onImageUpload} attachedImage={attachedImage} />
+                {!context && !attachedImage ? (
+                    <div className="flex flex-col items-center justify-center h-full text-center text-gray-500 pt-8">
                         <JaxIcon className="w-12 h-12 mb-3 text-gray-600"/>
                         <p className="font-semibold">Contextual data will appear here.</p>
-                        <p className="text-sm">Ask about a specific crypto to see live details.</p>
+                        <p className="text-sm">Ask about a specific crypto or upload a chart.</p>
                     </div>
                 ) : (
                     <>
@@ -168,10 +276,10 @@ export const ContextHub: React.FC<ContextHubProps> = ({ context, allCoins }) => 
                                 <ContextChart coinSymbol={liveCoinData.symbol} />
                             </>
                         ) : (
-                            context.symbol && <div className="text-center text-sm text-yellow-400 p-2 bg-yellow-500/10 rounded-md">Live price data not found for {context.symbol}.</div>
+                            context?.symbol && <div className="text-center text-sm text-yellow-400 p-2 bg-yellow-500/10 rounded-md">Live price data not found for {context.symbol}.</div>
                         )}
                         
-                        {context.narrative && (
+                        {context?.narrative && (
                             <div>
                                 <h4 className="text-sm font-bold text-gray-300 mb-2">AI Narrative</h4>
                                 <p className="text-sm text-gray-400 p-3 bg-gray-800 rounded-lg border border-gray-700 italic">
@@ -180,7 +288,7 @@ export const ContextHub: React.FC<ContextHubProps> = ({ context, allCoins }) => 
                             </div>
                         )}
 
-                        {context.posts && context.posts.length > 0 && (
+                        {context?.posts && context.posts.length > 0 && (
                             <div>
                                 <h4 className="text-sm font-bold text-gray-300 mb-2">Social Feed</h4>
                                 <div className="space-y-3">

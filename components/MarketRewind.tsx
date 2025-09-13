@@ -32,7 +32,11 @@ const TimelineEventCard: React.FC<{ event: BtcHistoryEntry }> = ({ event }) => (
     </div>
 );
 
-const DailySnapshotCard: React.FC<{ dayData: BtcHistoryEntry[] }> = ({ dayData }) => {
+const DailySnapshotCard: React.FC<{ 
+    dayData: BtcHistoryEntry[],
+    onAnalyzeEvent: (event: BtcHistoryEntry) => void,
+    isAnalyzing: boolean
+}> = ({ dayData, onAnalyzeEvent, isAnalyzing }) => {
     if (dayData.length === 0) return null;
     const primaryEntry = dayData.sort((a,b) => b.intensityScore - a.intensityScore)[0];
     const isPositive = primaryEntry.dailyChange >= 0;
@@ -59,20 +63,32 @@ const DailySnapshotCard: React.FC<{ dayData: BtcHistoryEntry[] }> = ({ dayData }
             <div className="mt-6 pt-4 border-t border-gray-700/50">
                 <h4 className="text-lg font-semibold text-purple-300">Market Events on this Day</h4>
                 <div className="space-y-3 mt-2">
-                    {dayData.map((event, idx) => (
-                        <div key={idx} className="bg-gray-900/50 p-3 rounded-lg">
-                             <div className="flex justify-between items-center">
-                                <p className={`font-semibold text-sm ${event.status === 'EVENT DETECTED' ? 'text-purple-300' : 'text-gray-300'}`}>{event.eventType}</p>
-                                <span className={`px-2 py-0.5 text-xs font-bold rounded-md ${event.direction === 'POSITIVE' ? 'bg-green-500/20 text-green-300' : event.direction === 'NEGATIVE' ? 'bg-red-500/20 text-red-300' : 'bg-gray-600 text-gray-200'}`}>{event.direction}</span>
-                            </div>
-                            <div className="mt-2">
-                                <p className="text-xs text-gray-400 mb-1">Intensity ({event.intensityScore}/10)</p>
-                                <div className="w-full bg-gray-700 rounded-full h-2">
-                                    <div className="bg-purple-500 h-2 rounded-full" style={{ width: `${event.intensityScore * 10}%` }}></div>
+                    {dayData.map((event, idx) => {
+                        const isAnalyzable = event.status === 'EVENT DETECTED';
+                        const cursorClass = isAnalyzing ? 'cursor-wait opacity-70' : 'cursor-pointer hover:bg-gray-800 hover:border-purple-500/50';
+                        return (
+                            <div 
+                                key={idx} 
+                                className={`bg-gray-900/50 p-3 rounded-lg transition-all border border-transparent ${isAnalyzable ? cursorClass : ''}`}
+                                onClick={isAnalyzable && !isAnalyzing ? () => onAnalyzeEvent(event) : undefined}
+                                title={isAnalyzable ? 'Click to analyze this event with AI' : ''}
+                            >
+                                 <div className="flex justify-between items-center">
+                                    <p className={`font-semibold text-sm flex items-center gap-2 ${isAnalyzable ? 'text-purple-300' : 'text-gray-300'}`}>
+                                        {isAnalyzable && <LightbulbIcon className="w-4 h-4 text-purple-400" />}
+                                        {event.eventType}
+                                    </p>
+                                    <span className={`px-2 py-0.5 text-xs font-bold rounded-md ${event.direction === 'POSITIVE' ? 'bg-green-500/20 text-green-300' : event.direction === 'NEGATIVE' ? 'bg-red-500/20 text-red-300' : 'bg-gray-600 text-gray-200'}`}>{event.direction}</span>
+                                </div>
+                                <div className="mt-2">
+                                    <p className="text-xs text-gray-400 mb-1">Intensity ({event.intensityScore}/10)</p>
+                                    <div className="w-full bg-gray-700 rounded-full h-2">
+                                        <div className="bg-purple-500 h-2 rounded-full" style={{ width: `${event.intensityScore * 10}%` }}></div>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             </div>
         </div>
@@ -172,6 +188,21 @@ export const MarketRewind: React.FC = () => {
         }
     }, [selectedDate, dayData]);
 
+    const handleAnalyzeEvent = useCallback(async (event: BtcHistoryEntry) => {
+        setIsAnalyzing(true);
+        setAiAnalysis(null);
+        // User requested preceding 3 days of data for specific event analysis.
+        const dataSlice = btcHistoryService.getDataSlice(event.date, 3, 'before');
+        try {
+            const analysis = await analyzeBtcPatterns(dataSlice, event.date, event.eventType);
+            setAiAnalysis(analysis);
+        } catch (e) {
+            setAiAnalysis("Analysis failed due to an API error. Please try again.");
+        } finally {
+            setIsAnalyzing(false);
+        }
+    }, []);
+
     const renderMainContent = () => {
         if (isLoading) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
         if (error) return <div className="flex-1 flex items-center justify-center text-red-400">{error}</div>;
@@ -188,12 +219,12 @@ export const MarketRewind: React.FC = () => {
 
                 {/* Main Content */}
                 <div className="lg:col-span-2 xl:col-span-3 space-y-6">
-                    <DailySnapshotCard dayData={dayData} />
+                    <DailySnapshotCard dayData={dayData} onAnalyzeEvent={handleAnalyzeEvent} isAnalyzing={isAnalyzing} />
                     {chartData && <HistoricalChart chartData={chartData} selectedDate={selectedDate} />}
                     <div>
                         <button onClick={handleAIAnalysis} disabled={isAnalyzing} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg transition-colors disabled:bg-gray-600">
                             {isAnalyzing ? <LoadingSpinner /> : <LightbulbIcon />}
-                            {isAnalyzing ? 'Analyzing...' : 'Analyze Patterns with AI'}
+                            {isAnalyzing ? 'Analyzing...' : 'Analyze Primary Event (15d Lookback)'}
                         </button>
                     </div>
                     {aiAnalysis && (

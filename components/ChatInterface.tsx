@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import type { ChatMessage as ChatMessageType, Idea, Signal, Health, ChatContext } from '../types';
 import { runChat } from '../services/geminiService';
@@ -10,6 +9,7 @@ import { SendIcon, PaperclipIcon, CloseIcon, BookmarkIcon, TrashIcon } from './I
 import type { CryptoPrice } from '../services/cryptoService';
 import { CryptoChartModal } from './CryptoChartModal';
 import { Trade } from '../services/tradeSimulatorService';
+import { GlobalWalletWidget } from './GlobalWalletWidget';
 
 type Timeframe = '24h' | '7d' | '30d' | '1y';
 
@@ -58,12 +58,13 @@ interface ChatInterfaceProps {
 
 export const ChatInterface: React.FC<ChatInterfaceProps> = ({ allCoins }) => {
   const [messages, setMessages] = useState<ChatMessageType[]>([
-    { id: 'initial', role: 'model', content: "I am JaxSpot, your AI market agent. How can I help you analyze the crypto markets today?" }
+    { id: 'initial', role: 'model', content: "I am JAX, your AI market agent. How can I help you analyze the crypto markets today?" }
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isStrategyMode, setIsStrategyMode] = useState(false);
   const [attachedFile, setAttachedFile] = useState<DriveFile | null>(null);
+  const [attachedImage, setAttachedImage] = useState<{ data: string; mimeType: string } | null>(null);
   const [isDriveAuthenticated, setIsDriveAuthenticated] = useState(googleDriveService.isAuthenticated());
   const [savedPrompts, setSavedPrompts] = useState<string[]>([]);
   const [contextData, setContextData] = useState<ChatContext | null>(null);
@@ -164,6 +165,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ allCoins }) => {
     setTradeForChart(tradeShim);
 };
 
+  const handleImageUpload = (data: string | null, mimeType: string | null) => {
+    setAttachedImage(data && mimeType ? { data, mimeType } : null);
+  };
+
   const handleSend = async (prompt?: string) => {
     const userMessageContent = prompt || input;
     if (!userMessageContent.trim() || isLoading) return;
@@ -172,7 +177,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ allCoins }) => {
     setInput('');
   
     let fullPrompt = userMessageContent;
-    let fileContent = '';
   
     if (isStrategyMode) {
       fullPrompt = `STRATEGY MODE ENABLED:\n${userMessageContent}`;
@@ -180,7 +184,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ allCoins }) => {
 
     if (attachedFile) {
       try {
-        fileContent = await googleDriveService.getFileContent(attachedFile.id);
+        const fileContent = await googleDriveService.getFileContent(attachedFile.id);
         const filePromptPart = `CONTEXT FROM FILE: ${attachedFile.name}\n\n---\n${fileContent}\n---\n\nUSER PROMPT: ${userMessageContent}`;
         fullPrompt = isStrategyMode ? `STRATEGY MODE ENABLED:\n${filePromptPart}` : filePromptPart;
       } catch (error) {
@@ -200,14 +204,16 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ allCoins }) => {
     const userMessage: ChatMessageType = {
       id: Date.now().toString(),
       role: 'user',
-      content: userMessageContent,
+      content: attachedImage ? `${userMessageContent} (image attached)` : userMessageContent,
     };
   
     setMessages(prev => [...prev, userMessage]);
-    setAttachedFile(null); 
+    setAttachedFile(null);
+    const imageToSend = attachedImage;
+    setAttachedImage(null);
   
     try {
-        const modelResponseString = await runChat(fullPrompt);
+        const modelResponseString = await runChat(fullPrompt, imageToSend);
         let newModelMessage: ChatMessageType;
 
         try {
@@ -309,164 +315,172 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ allCoins }) => {
 
 
   return (
-    <>
-    <div className="w-full h-full flex flex-col md:flex-row gap-4 bg-gray-800/50 rounded-lg shadow-2xl border border-gray-700 overflow-hidden">
-        {/* Left Panel: Chat */}
-        <div className="flex-1 flex flex-col min-w-0">
-            <div ref={messagesContainerRef} className="flex-grow p-4 overflow-y-auto space-y-6">
-                {messages.map((msg) => (
-                <ChatMessage 
-                    key={msg.id} 
-                    message={msg}
-                    onViewChartForIdea={handleViewChartForIdea}
-                />
-                ))}
-                {isLoading && (
-                    <div className="flex justify-start items-center space-x-3">
-                        <div className="w-10 h-10 rounded-full bg-purple-500 flex items-center justify-center flex-shrink-0 font-bold">J</div>
-                        <div className="bg-gray-700 p-3 rounded-lg"><LoadingSpinner /></div>
-                    </div>
-                )}
-            </div>
-            <div className="p-4 border-t border-gray-700">
-                {attachedFile && (
-                <div className="mb-2 flex items-center justify-between bg-gray-700 p-2 rounded-md text-sm">
-                    <span className="text-gray-300 truncate">
-                    Attached: <span className="font-medium text-white">{attachedFile.name}</span>
-                    </span>
-                    <button onClick={() => setAttachedFile(null)} className="text-gray-400 hover:text-white">
-                    <CloseIcon />
-                    </button>
+    <div className="h-full flex flex-col relative">
+      <div className="flex-1 min-h-0">
+        <div className="w-full h-full flex flex-col md:flex-row gap-4 bg-gray-800/50 rounded-lg shadow-2xl border border-gray-700 overflow-hidden">
+            {/* Left Panel: Chat */}
+            <div className="flex-1 flex flex-col min-w-0">
+                <div ref={messagesContainerRef} className="flex-grow p-4 overflow-y-auto space-y-6">
+                    {messages.map((msg) => (
+                    <ChatMessage 
+                        key={msg.id} 
+                        message={msg}
+                        onViewChartForIdea={handleViewChartForIdea}
+                    />
+                    ))}
+                    {isLoading && (
+                        <div className="flex justify-start items-center space-x-3">
+                            <div className="w-10 h-10 rounded-full bg-purple-500 flex items-center justify-center flex-shrink-0 font-bold">J</div>
+                            <div className="bg-gray-700 p-3 rounded-lg"><LoadingSpinner /></div>
+                        </div>
+                    )}
                 </div>
-                )}
+                <div className="p-4 border-t border-gray-700">
+                    {attachedFile && (
+                    <div className="mb-2 flex items-center justify-between bg-gray-700 p-2 rounded-md text-sm">
+                        <span className="text-gray-300 truncate">
+                        Attached: <span className="font-medium text-white">{attachedFile.name}</span>
+                        </span>
+                        <button onClick={() => setAttachedFile(null)} className="text-gray-400 hover:text-white">
+                        <CloseIcon />
+                        </button>
+                    </div>
+                    )}
 
-                <div className="mb-4 space-y-3">
-                    {savedPrompts.length > 0 && (
+                    <div className="mb-4 space-y-3">
+                        {savedPrompts.length > 0 && (
+                            <div>
+                                <h4 className="text-xs text-purple-400 font-semibold mb-1.5">My Prompts</h4>
+                                <div className="flex flex-wrap gap-2">
+                                    {savedPrompts.map(prompt => (
+                                        <div key={prompt} className="group flex items-center bg-gray-700 rounded-full">
+                                            <button
+                                                onClick={() => handleExamplePrompt(prompt)}
+                                                disabled={isLoading}
+                                                className="px-3 py-1 text-xs text-gray-300 transition-colors group-hover:text-white"
+                                            >
+                                                {prompt}
+                                            </button>
+                                            <button
+                                                onClick={() => handleDeletePrompt(prompt)}
+                                                className="pr-2 pl-1 text-gray-500 hover:text-red-400"
+                                                aria-label={`Delete prompt: ${prompt}`}
+                                            >
+                                                <TrashIcon className="w-3 h-3" />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                         <div>
-                            <h4 className="text-xs text-purple-400 font-semibold mb-1.5">My Prompts</h4>
-                            <div className="flex flex-wrap gap-2">
-                                {savedPrompts.map(prompt => (
-                                    <div key={prompt} className="group flex items-center bg-gray-700 rounded-full">
-                                        <button
-                                            onClick={() => handleExamplePrompt(prompt)}
-                                            disabled={isLoading}
-                                            className="px-3 py-1 text-xs text-gray-300 transition-colors group-hover:text-white"
-                                        >
-                                            {prompt}
-                                        </button>
-                                        <button
-                                            onClick={() => handleDeletePrompt(prompt)}
-                                            className="pr-2 pl-1 text-gray-500 hover:text-red-400"
-                                            aria-label={`Delete prompt: ${prompt}`}
-                                        >
-                                            <TrashIcon className="w-3 h-3" />
-                                        </button>
+                            <h4 className="text-xs text-gray-500 font-semibold mb-1.5">AI Training Prompts</h4>
+                             <div className="space-y-3">
+                                {TRAINING_PROMPTS.map(category => (
+                                    <div key={category.title}>
+                                        <h5 className="text-xs text-purple-400 font-semibold mb-1.5">{category.title}</h5>
+                                        <div className="flex flex-wrap gap-2">
+                                            {category.prompts.map(prompt => (
+                                                <button
+                                                    key={prompt}
+                                                    onClick={() => handleExamplePrompt(prompt)}
+                                                    disabled={isLoading}
+                                                    className="px-3 py-1 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-xs text-gray-300 rounded-full transition-colors text-left"
+                                                >
+                                                    {prompt}
+                                                </button>
+                                            ))}
+                                        </div>
                                     </div>
                                 ))}
                             </div>
                         </div>
-                    )}
-                    <div>
-                        <h4 className="text-xs text-gray-500 font-semibold mb-1.5">AI Training Prompts</h4>
-                         <div className="space-y-3">
-                            {TRAINING_PROMPTS.map(category => (
-                                <div key={category.title}>
-                                    <h5 className="text-xs text-purple-400 font-semibold mb-1.5">{category.title}</h5>
-                                    <div className="flex flex-wrap gap-2">
-                                        {category.prompts.map(prompt => (
-                                            <button
-                                                key={prompt}
-                                                onClick={() => handleExamplePrompt(prompt)}
-                                                disabled={isLoading}
-                                                className="px-3 py-1 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-xs text-gray-300 rounded-full transition-colors text-left"
-                                            >
-                                                {prompt}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
+                    </div>
+
+                    <div className="flex items-center justify-end mb-2">
+                        <label htmlFor="strategy-mode-toggle" className="flex items-center cursor-pointer">
+                            <span className="mr-3 text-sm font-medium text-gray-300">Strategy Mode</span>
+                            <div className="relative">
+                                <input 
+                                    type="checkbox" 
+                                    id="strategy-mode-toggle" 
+                                    className="sr-only" 
+                                    checked={isStrategyMode}
+                                    onChange={() => setIsStrategyMode(!isStrategyMode)}
+                                />
+                                <div className="block bg-gray-600 w-14 h-8 rounded-full"></div>
+                                <div className={`dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform ${isStrategyMode ? 'translate-x-6 bg-purple-400' : ''}`}></div>
+                            </div>
+                        </label>
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                        {isDriveAuthenticated && (
+                            <button
+                            onClick={handleAttachFile}
+                            disabled={isLoading}
+                            className="p-3 bg-gray-700 hover:bg-gray-600 rounded-lg disabled:opacity-50 transition-colors"
+                            aria-label="Attach file from Google Drive"
+                            >
+                            <PaperclipIcon />
+                            </button>
+                        )}
+                        <form onSubmit={(e) => { e.preventDefault(); handleSend(); }} className="flex-grow flex items-center space-x-2">
+                            <input
+                            type="text"
+                            value={input}
+                            onChange={(e) => setInput(e.target.value)}
+                            placeholder="Ask JAX for an idea..."
+                            disabled={isLoading}
+                            className="w-full bg-gradient-to-r from-purple-600 to-blue-500 border border-transparent rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-2 focus:ring-offset-gray-800 transition-shadow placeholder:text-gray-200"
+                            aria-label="Chat input"
+                            />
+                            <button
+                                type="button"
+                                onClick={handleSavePrompt}
+                                disabled={isLoading || !input.trim() || savedPrompts.includes(input.trim())}
+                                className="bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-500 disabled:cursor-not-allowed text-white font-bold p-3 rounded-lg transition-colors"
+                                aria-label="Save current prompt"
+                                title="Save Prompt"
+                            >
+                                <BookmarkIcon />
+                            </button>
+                            <button
+                            type="submit"
+                            disabled={isLoading || !input.trim()}
+                            className="bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold p-3 rounded-lg transition-colors"
+                            aria-label="Send message"
+                            >
+                            {isLoading ? <LoadingSpinner /> : <SendIcon />}
+                            </button>
+                        </form>
                     </div>
                 </div>
-
-                <div className="flex items-center justify-end mb-2">
-                    <label htmlFor="strategy-mode-toggle" className="flex items-center cursor-pointer">
-                        <span className="mr-3 text-sm font-medium text-gray-300">Strategy Mode</span>
-                        <div className="relative">
-                            <input 
-                                type="checkbox" 
-                                id="strategy-mode-toggle" 
-                                className="sr-only" 
-                                checked={isStrategyMode}
-                                onChange={() => setIsStrategyMode(!isStrategyMode)}
-                            />
-                            <div className="block bg-gray-600 w-14 h-8 rounded-full"></div>
-                            <div className={`dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform ${isStrategyMode ? 'translate-x-6 bg-purple-400' : ''}`}></div>
-                        </div>
-                    </label>
-                </div>
-
-                <div className="flex items-center space-x-2">
-                    {isDriveAuthenticated && (
-                        <button
-                        onClick={handleAttachFile}
-                        disabled={isLoading}
-                        className="p-3 bg-gray-700 hover:bg-gray-600 rounded-lg disabled:opacity-50 transition-colors"
-                        aria-label="Attach file from Google Drive"
-                        >
-                        <PaperclipIcon />
-                        </button>
-                    )}
-                    <form onSubmit={(e) => { e.preventDefault(); handleSend(); }} className="flex-grow flex items-center space-x-2">
-                        <input
-                        type="text"
-                        value={input}
-                        onChange={(e) => setInput(e.target.value)}
-                        placeholder="Ask JaxSpot for an idea..."
-                        disabled={isLoading}
-                        className="w-full bg-gradient-to-r from-purple-600 to-blue-500 border border-transparent rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-2 focus:ring-offset-gray-800 transition-shadow placeholder:text-gray-200"
-                        aria-label="Chat input"
-                        />
-                        <button
-                            type="button"
-                            onClick={handleSavePrompt}
-                            disabled={isLoading || !input.trim() || savedPrompts.includes(input.trim())}
-                            className="bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-500 disabled:cursor-not-allowed text-white font-bold p-3 rounded-lg transition-colors"
-                            aria-label="Save current prompt"
-                            title="Save Prompt"
-                        >
-                            <BookmarkIcon />
-                        </button>
-                        <button
-                        type="submit"
-                        disabled={isLoading || !input.trim()}
-                        className="bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold p-3 rounded-lg transition-colors"
-                        aria-label="Send message"
-                        >
-                        {isLoading ? <LoadingSpinner /> : <SendIcon />}
-                        </button>
-                    </form>
-                </div>
+            </div>
+            {/* Right Panel: Context Hub */}
+            <div className="w-full md:w-2/5 lg:w-1/3 border-t-2 md:border-t-0 md:border-l-2 border-gray-700/50 flex flex-col">
+                <ContextHub
+                    context={contextData}
+                    allCoins={allCoins}
+                    onImageUpload={handleImageUpload}
+                    attachedImage={attachedImage}
+                />
             </div>
         </div>
-        {/* Right Panel: Context Hub */}
-        <div className="w-full md:w-2/5 lg:w-1/3 border-t-2 md:border-t-0 md:border-l-2 border-gray-700/50 flex flex-col">
-            <ContextHub context={contextData} allCoins={allCoins} />
-        </div>
+      </div>
+      <GlobalWalletWidget />
+      {tradeForChart && (
+          <CryptoChartModal 
+              trade={tradeForChart}
+              onClose={() => setTradeForChart(null)}
+              initialTimeframe={initialChartTimeframe}
+          />
+      )}
+      <style>{`
+          .dot {
+              transition: transform 0.3s ease-in-out, background-color 0.3s ease-in-out;
+          }
+      `}</style>
     </div>
-    {tradeForChart && (
-        <CryptoChartModal 
-            trade={tradeForChart}
-            onClose={() => setTradeForChart(null)}
-            initialTimeframe={initialChartTimeframe}
-        />
-    )}
-     <style>{`
-        .dot {
-            transition: transform 0.3s ease-in-out, background-color 0.3s ease-in-out;
-        }
-    `}</style>
-    </>
   );
 };

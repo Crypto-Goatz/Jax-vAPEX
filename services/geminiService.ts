@@ -12,15 +12,36 @@ const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
 /**
  * Sends a prompt to the Gemini model with the predefined system instruction.
  * @param prompt The user's message.
+ * @param image Optional image data for multimodal prompts.
  * @returns A string containing the model's response, expected to be a JSON string.
  */
-export const runChat = async (prompt: string): Promise<string> => {
+export const runChat = async (
+    prompt: string,
+    image?: { data: string; mimeType: string }
+): Promise<string> => {
     try {
+        let contents: any;
+
+        if (image) {
+            const imagePart = {
+                inlineData: {
+                    mimeType: image.mimeType,
+                    data: image.data,
+                },
+            };
+            const textPart = {
+                text: prompt,
+            };
+            contents = { parts: [textPart, imagePart] };
+        } else {
+            contents = prompt;
+        }
+
         // Fix: Use ai.models.generateContent with correct parameters
         const response = await ai.models.generateContent({
-            // Fix: Use gemini-2.5-flash model
+            // Fix: Use gemini-2.5-flash model which supports vision
             model: "gemini-2.5-flash",
-            contents: prompt,
+            contents: contents,
             config: {
                 systemInstruction: SYSTEM_INSTRUCTION,
             },
@@ -271,5 +292,60 @@ export const analyzeBtcPatterns = async (dataSlice: BtcHistoryEntry[], selectedD
     } catch (error) {
         console.error("Gemini API call failed in analyzeBtcPatterns:", error);
         return "Sorry, the AI analysis failed. Please try again later.";
+    }
+};
+
+/**
+ * Asks the Gemini model to simulate an "If This, Then That" scenario.
+ * @param rule The IFTTT rule defined by the user.
+ * @returns A structured object containing a list of matching historical patterns.
+ */
+export const simulateSignalCondition = async (rule: object): Promise<{ results: any[] }> => {
+    try {
+        const prompt = `
+        You are JAX, an expert crypto market analyst AI.
+        A user has defined the following 'If This, Then That' market scenario:
+        ${JSON.stringify(rule, null, 2)}
+
+        Your task is to search your extensive historical market data (prices, on-chain, sentiment, etc.) to find all instances that match the "IF" condition.
+        For those instances, analyze the "THEN" asset to answer the user's "ask".
+        
+        Group your findings into distinct, named patterns or signals. For each pattern you identify, provide the following details.
+        Return a JSON object with a single key "results" containing an array of these patterns.
+        `;
+
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: prompt,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        results: {
+                            type: Type.ARRAY,
+                            items: {
+                                type: Type.OBJECT,
+                                properties: {
+                                    patternName: { type: Type.STRING, description: "A concise name for the identified pattern, e.g., 'Bullish Contagion' or 'Post-Spike Consolidation'." },
+                                    outcomeDescription: { type: Type.STRING, description: "A clear, human-readable summary of the most likely outcome based on the user's 'ask'. Include relevant metrics (e.g., price change, sentiment score, USD value) and timeframe. Example: 'Average gain of +8.21% over the next 3 days.' OR 'Whale wallets show an average accumulation of $1.5M over the next 48 hours.'" },
+                                    historicalOccurrences: { type: Type.INTEGER, description: "The number of times this exact pattern was observed in the historical data." },
+                                    confidenceScore: { type: Type.NUMBER, description: "Your confidence in this outcome occurring again, from 0 to 100." }
+                                },
+                                required: ["patternName", "outcomeDescription", "historicalOccurrences", "confidenceScore"]
+                            }
+                        }
+                    },
+                    required: ["results"]
+                }
+            }
+        });
+
+        const jsonString = response.text.trim();
+        return JSON.parse(jsonString);
+
+    } catch (error) {
+        console.error("Gemini API call failed in simulateSignalCondition:", error);
+        throw new Error("Failed to get simulation results from the AI.");
     }
 };

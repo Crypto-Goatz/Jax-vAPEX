@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { ChatInterface } from './components/ChatInterface';
 import { SideNav } from './components/SideNav';
@@ -12,13 +11,14 @@ import { MarketRewind } from './components/MarketRewind';
 import { ActiveLearning } from './components/ActiveLearning';
 import { Experiments } from './components/Experiments';
 import { JaxSignals } from './components/JaxSignals';
+import { SignalStudio } from './components/SignalStudio';
 import { MenuIcon, CloseIcon } from './components/Icons';
 import { tradeSimulatorService, Trade } from './services/tradeSimulatorService';
 import { signalsService } from './services/signalsService';
 import { fetchLivePricing, CryptoPrice } from './services/cryptoService';
 import { PipelineFooter } from './components/PipelineFooter';
 
-export type ActiveView = 'chat' | 'specs' | 'pricing' | 'data' | 'pipeline' | 'trends' | 'wallet' | 'rewind' | 'learning' | 'experiments' | 'signals';
+export type ActiveView = 'chat' | 'specs' | 'pricing' | 'data' | 'pipeline' | 'trends' | 'wallet' | 'rewind' | 'learning' | 'experiments' | 'signals' | 'signalStudio';
 
 export interface PipelineCryptoPrice extends CryptoPrice {
   confidence?: number;
@@ -90,7 +90,7 @@ const RENDER_PIPELINE_STAGES = [...PIPELINE_STAGES, EXECUTION_STAGE_DEFINITION, 
 
 const App: React.FC = () => {
   const [isNavOpen, setIsNavOpen] = useState(true);
-  const [activeView, setActiveView] = useState<ActiveView>('pipeline');
+  const [activeView, setActiveView] = useState<ActiveView>('chat');
   const [isFooterExpanded, setIsFooterExpanded] = useState(false);
   
   // --- Centralized Pipeline State ---
@@ -205,8 +205,9 @@ const App: React.FC = () => {
             });
 
             // Auto-execute trades from Stage 4
+            const executionThreshold = tradeSimulatorService.getSettings().executionConfidenceThreshold;
             for (const coin of newPipeline.stage4) {
-                 if ((coin.confidence ?? 0) > 65) {
+                 if ((coin.confidence ?? 0) > executionThreshold) {
                     tradeSimulatorService.executeTrade(coin, 'buy');
                  }
             }
@@ -290,6 +291,7 @@ const App: React.FC = () => {
           {activeView === 'learning' && <ActiveLearning allCoins={allCoins} />}
           {activeView === 'experiments' && <Experiments allCoins={allCoins} />}
           {activeView === 'signals' && <JaxSignals allCoins={allCoins} />}
+          {activeView === 'signalStudio' && <SignalStudio allCoins={allCoins} />}
         </main>
 
         <SideNav

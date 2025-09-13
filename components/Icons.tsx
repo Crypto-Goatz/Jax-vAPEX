@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 export const MenuIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
@@ -69,6 +70,15 @@ export const BeakerIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
 export const BellIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} {...props}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+    </svg>
+);
+
+export const FlowChartIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} {...props}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V7" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V5a2 2 0 012-2h4a2 2 0 012 2v2" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 12h.01" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 19v-3" />
     </svg>
 );
 

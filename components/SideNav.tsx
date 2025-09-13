@@ -1,5 +1,5 @@
 import React from 'react';
-import { CloseIcon, ChartBarIcon, DatabaseIcon, PipelineIcon, LineChartIcon, ChatBubbleIcon, WalletIcon, RewindIcon, LightbulbIcon, BeakerIcon, BellIcon } from './Icons';
+import { CloseIcon, ChartBarIcon, DatabaseIcon, PipelineIcon, LineChartIcon, ChatBubbleIcon, WalletIcon, RewindIcon, LightbulbIcon, BeakerIcon, BellIcon, FlowChartIcon } from './Icons';
 import type { ActiveView } from '../App';
 import { Logo } from './Logo';
 
@@ -56,14 +56,13 @@ export const SideNav: React.FC<SideNavProps> = ({ isOpen, onClose, activeView, s
 
           <button
             onClick={() => setActiveView('chat')}
-            className={`w-full text-left p-4 rounded-lg transition-all duration-300 flex items-center space-x-3 text-lg font-semibold shadow-lg hover:shadow-purple-500/40 ${
+            className={`w-full text-left p-4 rounded-lg transition-all duration-300 flex items-center justify-center space-x-3 text-2xl font-bold shadow-lg hover:shadow-purple-500/40 ${
               activeView === 'chat'
                 ? 'bg-gradient-to-r from-purple-600 to-blue-500 text-white'
-                : 'bg-gray-800 hover:bg-gray-700 text-gray-200'
+                : 'bg-gray-800 hover:bg-gray-700 text-white'
             }`}
           >
-            <ChatBubbleIcon />
-            <span>Jax AI</span>
+            <span className="tracking-widest">JAX</span>
           </button>
 
           <nav className="space-y-2 border-t border-gray-700/60 pt-4">
@@ -118,6 +117,13 @@ export const SideNav: React.FC<SideNavProps> = ({ isOpen, onClose, activeView, s
             >
               <BellIcon />
               <span>Jax Signals</span>
+            </button>
+            <button
+              onClick={() => setActiveView('signalStudio')}
+              className={`${navButtonClasses} ${activeView === 'signalStudio' ? activeButtonClasses : ''}`}
+            >
+              <FlowChartIcon />
+              <span>Signal Studio</span>
             </button>
              <button
               onClick={() => setActiveView('wallet')}
