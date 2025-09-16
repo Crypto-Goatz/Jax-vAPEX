@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { SYSTEM_INSTRUCTION } from '../constants';
 import type { LearningPattern } from './learningService';
@@ -10,10 +9,39 @@ import type { BtcHistoryEntry } from './btcHistoryService';
 const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
 
 /**
+ * Helper to create a user-friendly error message from a Gemini API error.
+ * @param error The error object from the catch block.
+ * @returns A user-friendly string.
+ */
+const getFriendlyErrorMessage = (error: any): string => {
+    if (typeof error === 'object' && error !== null) {
+        const errorMessage = (`${error.message || ''} ${error.toString() || ''}`).toLowerCase();
+
+        if (errorMessage.includes('api key not valid')) {
+            return "The connection to the AI failed due to an invalid API Key setup.";
+        }
+        if (errorMessage.includes('rate limit') || errorMessage.includes('429')) {
+            return "You've made too many requests in a short period. Please wait and try again.";
+        }
+        if (errorMessage.includes('overloaded') || errorMessage.includes('503') || errorMessage.includes('unavailable')) {
+            return "The AI model is currently experiencing high traffic or is temporarily unavailable. Please try again in a few moments.";
+        }
+        if (errorMessage.includes('safety') || errorMessage.includes('blocked')) {
+            return "The AI's response was blocked due to safety settings. Please try modifying your prompt.";
+        }
+        if (errorMessage.includes('400') || errorMessage.includes('invalid argument')) {
+             return "The request sent to the AI was invalid. Please try rephrasing your prompt or check any attached images.";
+        }
+    }
+    
+    return "Sorry, an unexpected error occurred while connecting to the AI. Please try again.";
+};
+
+/**
  * Sends a prompt to the Gemini model with the predefined system instruction.
  * @param prompt The user's message.
  * @param image Optional image data for multimodal prompts.
- * @returns A string containing the model's response, expected to be a JSON string.
+ * @returns A string containing the model's text response.
  */
 export const runChat = async (
     prompt: string,
@@ -37,84 +65,19 @@ export const runChat = async (
             contents = prompt;
         }
 
-        // Fix: Use ai.models.generateContent with correct parameters
         const response = await ai.models.generateContent({
-            // Fix: Use gemini-2.5-flash model which supports vision
             model: "gemini-2.5-flash",
             contents: contents,
             config: {
                 systemInstruction: SYSTEM_INSTRUCTION,
             },
         });
-        // Fix: Return text directly from the response
+        
         return response.text;
-    } catch (error) {
+
+    } catch (error: any) {
         console.error("Gemini API call failed in runChat:", error);
-        // Fallback to a structured error message that the frontend can parse
-        return JSON.stringify({
-            type: 'text',
-            payload: {
-                text: "Sorry, I encountered an error connecting to the AI. Please try again."
-            }
-        });
-    }
-};
-
-/**
- * Asks the Gemini model to generate current market narratives and commentary.
- * @returns A structured object with narratives and market mover comments.
- */
-export const getMarketNarratives = async (): Promise<{ narratives: any[], market_movers_commentary: any[] }> => {
-    try {
-        const prompt = `Analyze the current crypto market based on real-time data. Identify 3-5 key emerging narratives driving price action. For each narrative, provide a title, a concise summary, the relevant pipeline stage (e.g., "Watchlist", "Signal", "Spot"), key indicators, a list of affected asset symbols, and a current ISO 8601 timestamp. Also, provide brief commentary for the top 3 market gainers and top 3 losers in the last 24 hours.`;
-
-        const response = await ai.models.generateContent({
-            // Fix: Use gemini-2.5-flash model
-            model: "gemini-2.5-flash",
-            contents: prompt,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.OBJECT,
-                    properties: {
-                        narratives: {
-                            type: Type.ARRAY,
-                            items: {
-                                type: Type.OBJECT,
-                                properties: {
-                                    title: { type: Type.STRING },
-                                    summary: { type: Type.STRING },
-                                    pipeline_stage: { type: Type.STRING },
-                                    key_indicators: { type: Type.ARRAY, items: { type: Type.STRING } },
-                                    affected_assets: { type: Type.ARRAY, items: { type: Type.STRING } },
-                                    timestamp: { type: Type.STRING, description: "ISO 8601 timestamp" }
-                                },
-                                required: ["title", "summary", "pipeline_stage", "key_indicators", "affected_assets", "timestamp"]
-                            }
-                        },
-                        market_movers_commentary: {
-                             type: Type.ARRAY,
-                             items: {
-                                 type: Type.OBJECT,
-                                 properties: {
-                                     symbol: { type: Type.STRING },
-                                     comment: { type: Type.STRING }
-                                 },
-                                 required: ["symbol", "comment"]
-                             }
-                        }
-                    },
-                    required: ["narratives", "market_movers_commentary"]
-                }
-            }
-        });
-
-        const jsonString = response.text.trim();
-        return JSON.parse(jsonString);
-
-    } catch (error) {
-        console.error("Gemini API call failed in getMarketNarratives:", error);
-        throw new Error("Failed to get market narratives from the AI.");
+        return getFriendlyErrorMessage(error);
     }
 };
 
@@ -164,7 +127,7 @@ export const getLearningPatterns = async (): Promise<{ patterns: LearningPattern
 
     } catch (error) {
         console.error("Gemini API call failed in getLearningPatterns:", error);
-        throw new Error("Failed to get learning patterns from the AI.");
+        throw new Error(getFriendlyErrorMessage(error));
     }
 };
 
@@ -205,7 +168,7 @@ export const getSmartSignalSearch = async (query: string, signals: AvailableSign
 
     } catch (error) {
         console.error("Gemini API call failed in getSmartSignalSearch:", error);
-        throw new Error("Failed to perform smart search with the AI.");
+        throw new Error(getFriendlyErrorMessage(error));
     }
 };
 
@@ -246,9 +209,50 @@ export const getRefinedPattern = async (pattern: LearningPattern, pnl: number): 
 
     } catch (error) {
         console.error("Gemini API call failed in getRefinedPattern:", error);
-        return "Could not get a refined pattern from the AI due to an error.";
+        return getFriendlyErrorMessage(error);
     }
 };
+
+/**
+ * Asks the Gemini model to suggest refinements for a pattern before it's been tested.
+ * @param pattern The learning pattern to refine.
+ * @returns A string containing the AI's suggestion for a refined pattern.
+ */
+export const getRefinedPatternSuggestion = async (pattern: LearningPattern): Promise<string> => {
+    try {
+        const prompt = `
+        As an expert AI trading strategist, analyze the following proposed trading pattern.
+        A user has reviewed this pattern and believes it has potential but needs refinement before testing.
+
+        Pattern Details:
+        - Title: "${pattern.title}"
+        - Category: ${pattern.category}
+        - Hypothesis: "${pattern.description}"
+        - Trigger Asset: ${pattern.trigger_asset}
+        - Affected Asset: ${pattern.affected_asset}
+        - Direction: ${pattern.trade_direction}
+        - Initial AI Confidence: ${pattern.confidence}%
+
+        Your task is to propose a refined, more robust version of this pattern.
+        1.  Identify potential flaws. Is it too simple? Does it miss a key confirmation indicator (e.g., volume, volatility, another asset's movement)?
+        2.  Suggest 1-2 specific, additional conditions to add to the hypothesis to improve its accuracy. Examples: "AND BTC volume is above the 24h average" or "AND DXY is trending downwards".
+        3.  Provide a new, improved "description" for the refined pattern.
+        4.  Keep the response concise and actionable.
+        `;
+
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: prompt,
+        });
+
+        return response.text;
+
+    } catch (error) {
+        console.error("Gemini API call failed in getRefinedPatternSuggestion:", error);
+        return getFriendlyErrorMessage(error);
+    }
+};
+
 
 /**
  * Asks the Gemini model to analyze a slice of historical BTC data to find patterns.
@@ -291,7 +295,7 @@ export const analyzeBtcPatterns = async (dataSlice: BtcHistoryEntry[], selectedD
 
     } catch (error) {
         console.error("Gemini API call failed in analyzeBtcPatterns:", error);
-        return "Sorry, the AI analysis failed. Please try again later.";
+        return getFriendlyErrorMessage(error);
     }
 };
 
@@ -346,6 +350,6 @@ export const simulateSignalCondition = async (rule: object): Promise<{ results: 
 
     } catch (error) {
         console.error("Gemini API call failed in simulateSignalCondition:", error);
-        throw new Error("Failed to get simulation results from the AI.");
+        throw new Error(getFriendlyErrorMessage(error));
     }
 };

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { getLearningPatterns } from '../services/geminiService';
 import { learningService, LearningPattern } from '../services/learningService';
 import { LoadingSpinner } from './LoadingSpinner';
-import { CheckCircleIcon, XCircleIcon, RefreshIcon, LightbulbIcon } from './Icons';
+import { CheckCircleIcon, RefreshIcon, LightbulbIcon, RecycleIcon } from './Icons';
 import { CryptoPrice } from '../services/cryptoService';
 
 const PATTERN_CATEGORIES: { [key: string]: { icon: string, color: string } } = {
@@ -17,9 +17,9 @@ const PATTERN_CATEGORIES: { [key: string]: { icon: string, color: string } } = {
 const PatternCard: React.FC<{
   pattern: LearningPattern;
   onApprove: () => void;
-  onReject: () => void;
+  onRecycle: () => void;
   isProcessing: boolean;
-}> = ({ pattern, onApprove, onReject, isProcessing }) => {
+}> = ({ pattern, onApprove, onRecycle, isProcessing }) => {
   const categoryInfo = PATTERN_CATEGORIES[pattern.category] || { icon: '💡', color: 'text-purple-400' };
   const confidence = pattern.confidence;
   const confidenceColor = confidence > 75 ? 'bg-green-500' : confidence > 50 ? 'bg-yellow-500' : 'bg-red-500';
@@ -34,17 +34,25 @@ const PatternCard: React.FC<{
                 <span>{pattern.category}</span>
             </div>
         </div>
+        
         <p className="text-sm text-gray-300 mt-2 italic">"{pattern.description}"</p>
+
+        <div className="mt-4 p-3 bg-gray-900/50 rounded-lg text-sm border border-gray-700/50">
+             <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider mb-2">Conditions</p>
+             <p><span className="font-bold text-purple-300">IF:</span> <span className="font-semibold text-white">{pattern.trigger_asset}</span> shows pattern</p>
+             <p><span className="font-bold text-purple-300">THEN:</span> <span className="font-semibold text-white uppercase">{pattern.trade_direction}</span> <span className="font-semibold text-white">{pattern.affected_asset}</span></p>
+        </div>
+        
         <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
             <div className="bg-gray-900/50 p-2 rounded-md">
                 <p className="text-xs text-gray-400">Times Observed</p>
                 <p className="font-mono text-lg font-bold text-white">{pattern.observation_count}</p>
             </div>
             <div className="bg-gray-900/50 p-2 rounded-md">
-                <p className="text-xs text-gray-400">AI Confidence</p>
+                <p className="text-xs text-gray-400 mb-1">AI Confidence</p>
                 <div className="flex items-center gap-2">
-                    <div className="w-full bg-gray-700 rounded-full h-2 flex-grow">
-                        <div className={`${confidenceColor} h-2 rounded-full`} style={{ width: `${confidence}%` }}></div>
+                    <div className="w-full bg-gray-700 rounded-full h-2.5 flex-grow">
+                        <div className={`${confidenceColor} h-2.5 rounded-full`} style={{ width: `${confidence}%` }}></div>
                     </div>
                     <p className="font-mono font-bold text-white text-lg">{confidence.toFixed(0)}%</p>
                 </div>
@@ -53,12 +61,13 @@ const PatternCard: React.FC<{
       </div>
       <div className="bg-gray-900/50 p-3 flex justify-end items-center space-x-3 border-t border-gray-700">
         <button
-          onClick={onReject}
+          onClick={onRecycle}
           disabled={isProcessing}
-          className="p-3 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-full transition-colors disabled:opacity-50"
-          aria-label="Reject pattern"
+          className="p-3 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 rounded-full transition-colors disabled:opacity-50"
+          aria-label="Recycle and refine pattern"
+          title="Recycle & Refine"
         >
-          <XCircleIcon className="w-6 h-6" />
+          <RecycleIcon className="w-6 h-6" />
         </button>
         <button
           onClick={onApprove}
@@ -115,11 +124,11 @@ export const ActiveLearning: React.FC<ActiveLearningProps> = ({ allCoins }) => {
     setProcessingId(null);
   };
 
-  const handleReject = (patternId: string) => {
-    setProcessingId(patternId);
-    // Simply remove from view. We could persist rejections to avoid seeing them again,
-    // but for this version, a refresh will bring new ones anyway.
-    setPatterns(prev => prev.filter(p => p.id !== patternId));
+  const handleRecycle = (pattern: LearningPattern) => {
+    setProcessingId(pattern.id);
+    learningService.recyclePattern(pattern);
+    // Remove from view
+    setPatterns(prev => prev.filter(p => p.id !== pattern.id));
     setProcessingId(null);
   };
 
@@ -160,7 +169,7 @@ export const ActiveLearning: React.FC<ActiveLearningProps> = ({ allCoins }) => {
             key={pattern.id}
             pattern={pattern}
             onApprove={() => handleApprove(pattern)}
-            onReject={() => handleReject(pattern.id)}
+            onRecycle={() => handleRecycle(pattern)}
             isProcessing={processingId === pattern.id}
           />
         ))}

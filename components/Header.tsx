@@ -7,7 +7,7 @@ export const Header: React.FC<{ onToggleNav: () => void }> = ({ onToggleNav }) =
       <div className="max-w-7xl mx-auto flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">
-            Jax<span className="text-purple-400">Spot</span>
+            Jax<span className="font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-blue-500">Spot</span>
           </h1>
           <p className="text-xs text-gray-400">Crypto Goatz AI Market Agent</p>
         </div>

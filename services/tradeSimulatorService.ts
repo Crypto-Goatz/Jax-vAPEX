@@ -22,8 +22,7 @@ export type InvestmentStyle = 'Scalping' | 'Day Trading' | 'Swing Trading';
 export interface WalletSettings {
   riskTolerance: RiskTolerance;
   investmentStyle: InvestmentStyle;
-  aiConfidence: number; // This is now a manual override; the system uses executionConfidenceThreshold
-  executionConfidenceThreshold: number; // The AI's self-adjusted threshold
+  aiConfidence: number;
   webhookUrl: string;
   webhookEnabled: boolean;
 }
@@ -32,7 +31,6 @@ const DEFAULT_SETTINGS: WalletSettings = {
   riskTolerance: 'Moderate',
   investmentStyle: 'Day Trading',
   aiConfidence: 75.0,
-  executionConfidenceThreshold: 65.0, // Initial threshold
   webhookUrl: '',
   webhookEnabled: false,
 };
@@ -111,50 +109,6 @@ class TradeSimulatorService {
       localStorage.setItem('jaxspot_wallet_settings', JSON.stringify(this.settings));
     } catch (error) {
       console.error("Failed to save settings to localStorage:", error);
-    }
-  }
-  
-  private selfOptimizeStrategy() {
-    const closedTrades = this.trades.filter(t => t.status === 'closed');
-    if (closedTrades.length < 10) return; // Wait for a decent sample size
-
-    console.log(`[AI Strategy] Running self-optimization check...`);
-    
-    const recentTrades = closedTrades.slice(0, 20); // Analyze the last 20 trades
-    const wins = recentTrades.filter(t => (t.pnl ?? 0) >= 0).length;
-    const currentWinRate = (wins / recentTrades.length) * 100;
-    const targetWinRate = 90;
-
-    const riskLevels: RiskTolerance[] = ['Conservative', 'Moderate', 'Aggressive'];
-    const styleLevels: InvestmentStyle[] = ['Scalping', 'Day Trading', 'Swing Trading'];
-
-    let currentRiskIndex = riskLevels.indexOf(this.settings.riskTolerance);
-    let currentStyleIndex = styleLevels.indexOf(this.settings.investmentStyle);
-    let newSettings = { ...this.settings };
-    
-    if (currentWinRate < targetWinRate) {
-        console.log(`[AI Strategy] Win rate at ${currentWinRate.toFixed(1)}% is below target ${targetWinRate}%. Increasing caution.`);
-        // Become more conservative
-        if (currentRiskIndex > 0) newSettings.riskTolerance = riskLevels[currentRiskIndex - 1];
-        if (currentStyleIndex > 0) newSettings.investmentStyle = styleLevels[currentStyleIndex - 1];
-        // Require higher confidence to enter a trade
-        newSettings.executionConfidenceThreshold = Math.min(85, this.settings.executionConfidenceThreshold + 2.5);
-    } else {
-         console.log(`[AI Strategy] Win rate at ${currentWinRate.toFixed(1)}% meets target. Maintaining or slightly increasing aggression.`);
-        // If performing well, can afford to be slightly more aggressive for higher profits
-        if (currentWinRate > targetWinRate + 2) { // Add a buffer
-            if (currentRiskIndex < riskLevels.length - 1) newSettings.riskTolerance = riskLevels[currentRiskIndex + 1];
-            if (currentStyleIndex < styleLevels.length - 1) newSettings.investmentStyle = styleLevels[currentStyleIndex + 1];
-        }
-        // Slightly lower confidence requirement to find more opportunities
-        newSettings.executionConfidenceThreshold = Math.max(60, this.settings.executionConfidenceThreshold - 1.0);
-    }
-
-    if (JSON.stringify(newSettings) !== JSON.stringify(this.settings)) {
-        console.log(`[AI Strategy] New settings applied: Risk -> ${newSettings.riskTolerance}, Style -> ${newSettings.investmentStyle}, Threshold -> ${newSettings.executionConfidenceThreshold.toFixed(1)}%`);
-        this.settings = newSettings;
-        this.saveSettings();
-        this.notifyListeners();
     }
   }
   
@@ -294,7 +248,6 @@ class TradeSimulatorService {
 
   updateOpenTrades(livePrices: CryptoPrice[]) {
     let updated = false;
-    let closedTradeOccurred = false;
     const priceMap = new Map(livePrices.map(p => [p.id, p.price]));
     const now = Date.now();
 
@@ -332,7 +285,6 @@ class TradeSimulatorService {
             trade.closeReason = closeReason;
             trade.takeProfitPrice = takeProfitPrice;
             trade.stopLossPrice = stopLossPrice;
-            closedTradeOccurred = true;
             console.log(`Auto-closing trade ${trade.id} for ${trade.coin.symbol}. Reason: ${closeReason}.`);
             this.sendWebhook({ type: 'trade_close', trade });
           }
@@ -343,12 +295,6 @@ class TradeSimulatorService {
     if (updated) {
         this.saveTrades();
         this.notifyListeners();
-    }
-    
-    // Run self-optimization logic if a trade was closed
-    const closedTradesCount = this.trades.filter(t => t.status === 'closed').length;
-    if (closedTradeOccurred && closedTradesCount > 0 && closedTradesCount % 5 === 0) {
-        this.selfOptimizeStrategy();
     }
   }
 

@@ -2,7 +2,7 @@
 export interface ChatMessage {
   id: string;
   role: 'user' | 'model';
-  content: string | Idea | Signal | Health;
+  content: string;
 }
 
 export interface SocialPost {

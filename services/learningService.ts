@@ -1,6 +1,6 @@
 import { CryptoPrice } from "./cryptoService";
 import { tradeSimulatorService } from "./tradeSimulatorService";
-import { getRefinedPattern } from './geminiService';
+import { getRefinedPattern, getRefinedPatternSuggestion } from './geminiService';
 
 export interface LearningPattern {
   id: string;
@@ -153,6 +153,17 @@ class LearningService {
         console.log(`%c--- AI REFINEMENT SUGGESTION ---\n${suggestion}\n---------------------------------`, "color: #a855f7; font-weight: bold;");
         this.addLog(`AI proposed refinement for "${experimentToRecycle.title}". Check console for details.`, 'info', experimentId);
     }
+
+    async recyclePattern(pattern: LearningPattern): Promise<void> {
+        this.addLog(`Pattern "${pattern.title}" sent back to AI for immediate refinement.`, 'info');
+        
+        // Asynchronously ask AI to refine it
+        console.log(`Asking AI to refine potential pattern: ${pattern.title}`);
+        const suggestion = await getRefinedPatternSuggestion(pattern);
+        
+        console.log(`%c--- AI REFINEMENT SUGGESTION ---\n${suggestion}\n---------------------------------`, "color: #a855f7; font-weight: bold;");
+        this.addLog(`AI proposed refinement for "${pattern.title}". Check console for details.`, 'info');
+    }
     
     resumeExperiment(experimentId: string, allCoins: CryptoPrice[]) {
         const experiment = this.experiments.find(exp => exp.id === experimentId);
@@ -166,7 +177,7 @@ class LearningService {
         experiment.result = undefined;
         experiment.approvedTimestamp = Date.now(); // Move it to the top of the list
 
-        this.addLog(`Resuming experiment "${experiment.title}".`, 'info', experimentId);
+        this.addLog(`Resuming experiment "${experiment.title}".`, 'info', experiment.id);
         this.saveExperiments();
         this.notifyListeners();
 

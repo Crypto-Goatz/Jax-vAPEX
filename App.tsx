@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { ChatInterface } from './components/ChatInterface';
 import { SideNav } from './components/SideNav';
@@ -15,7 +16,7 @@ import { SignalStudio } from './components/SignalStudio';
 import { MenuIcon, CloseIcon } from './components/Icons';
 import { tradeSimulatorService, Trade } from './services/tradeSimulatorService';
 import { signalsService } from './services/signalsService';
-import { fetchLivePricing, CryptoPrice } from './services/cryptoService';
+import { fetchLivePricing, CryptoPrice, GlobalLiquidity, NewsSentiment, getGlobalLiquidity, getNewsSentiment } from './services/cryptoService';
 import { PipelineFooter } from './components/PipelineFooter';
 
 export type ActiveView = 'chat' | 'specs' | 'pricing' | 'data' | 'pipeline' | 'trends' | 'wallet' | 'rewind' | 'learning' | 'experiments' | 'signals' | 'signalStudio';
@@ -100,6 +101,10 @@ const App: React.FC = () => {
   const [openTrades, setOpenTrades] = useState<Trade[]>([]);
   const [isPipelineLoading, setIsPipelineLoading] = useState(true);
 
+  // --- NEW: State for global data ---
+  const [globalLiquidity, setGlobalLiquidity] = useState<GlobalLiquidity | null>(null);
+  const [newsSentiment, setNewsSentiment] = useState<NewsSentiment | null>(null);
+
   // Automatically collapse footer on chat view
   useEffect(() => {
     if (activeView === 'chat' && isFooterExpanded) {
@@ -141,8 +146,14 @@ const App: React.FC = () => {
         if (!isMounted) return;
 
         try {
+            // This now fetches from the new primary source, with fallbacks
             const prices = await fetchLivePricing();
             if (!isMounted) return;
+
+            // NEW: Fetch global and news data from the cached source
+            setGlobalLiquidity(await getGlobalLiquidity());
+            setNewsSentiment(await getNewsSentiment());
+            
             if (isPipelineLoading && prices.length > 0) setIsPipelineLoading(false);
             
             setAllCoins(prices);
@@ -205,7 +216,8 @@ const App: React.FC = () => {
             });
 
             // Auto-execute trades from Stage 4
-            const executionThreshold = tradeSimulatorService.getSettings().executionConfidenceThreshold;
+            // Fix: Corrected property name from 'executionConfidenceThreshold' to 'aiConfidence' to match the WalletSettings interface and fix a TypeError.
+            const executionThreshold = tradeSimulatorService.getSettings().aiConfidence;
             for (const coin of newPipeline.stage4) {
                  if ((coin.confidence ?? 0) > executionThreshold) {
                     tradeSimulatorService.executeTrade(coin, 'buy');
@@ -224,12 +236,8 @@ const App: React.FC = () => {
 
                     for (const id of previousIds) {
                         if (!currentIds.has(id)) {
-                            // FIX: The original code used `prices.find()`, which could return `undefined` if a coin
-                            // dropped off the live pricing list between updates, causing a crash when accessing `.coin.symbol`.
-                            // This version safely retrieves the coin data from the previous pipeline state where it is guaranteed to exist.
                             const exitedCoinData = previousStageCoins.find(c => c.id === id);
                             if (exitedCoinData) {
-                                // For display, we still want the absolute latest price if available, but fallback safely.
                                 const latestPriceData = prices.find(p => p.id === id);
                                 lastExitedCoin = { 
                                     coin: latestPriceData || exitedCoinData, 
@@ -274,7 +282,7 @@ const App: React.FC = () => {
         <main className={`flex-1 flex flex-col p-2 md:p-4 overflow-y-auto relative transition-all duration-300 ease-in-out ${footerHeightClass} ${isNavOpen ? 'md:mr-64' : ''}`}>
           <button
             onClick={toggleNav}
-            className={`fixed top-4 text-gray-300 hover:text-white z-40 p-2 bg-gray-800/50 rounded-md transition-all duration-300 ease-in-out ${isNavOpen ? 'right-68' : 'right-4'}`}
+            className={`fixed top-4 right-4 text-gray-300 hover:text-white z-40 p-2 bg-gray-800/50 rounded-md transition-transform duration-300 ease-in-out ${isNavOpen ? 'md:translate-x-[-16rem]' : 'md:translate-x-0'}`}
             aria-label={isNavOpen ? "Close navigation menu" : "Open navigation menu"}
           >
             {isNavOpen ? <CloseIcon /> : <MenuIcon />}
@@ -285,7 +293,7 @@ const App: React.FC = () => {
           {activeView === 'pricing' && <SpotLive />}
           {activeView === 'data' && <DataSources />}
           {activeView === 'pipeline' && <PredictionPipeline pipeline={pipeline} exitedCoins={exitedCoins} allCoins={allCoins} isLoading={isPipelineLoading} stages={RENDER_PIPELINE_STAGES} />}
-          {activeView === 'trends' && <MarketTrends />}
+          {activeView === 'trends' && <MarketTrends allCoins={allCoins} newsSentiment={newsSentiment} />}
           {activeView === 'wallet' && <SimulatedWallet />}
           {activeView === 'rewind' && <MarketRewind />}
           {activeView === 'learning' && <ActiveLearning allCoins={allCoins} />}
@@ -299,6 +307,7 @@ const App: React.FC = () => {
           onClose={() => setIsNavOpen(false)}
           activeView={activeView}
           setActiveView={setActiveView}
+          globalLiquidity={globalLiquidity}
         />
       </div>
       <PipelineFooter

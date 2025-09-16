@@ -481,7 +481,6 @@ export const SpotLive: React.FC = () => {
     const [alerts, setAlerts] = useState<PriceAlert[]>([]);
     const [notificationBannerAlert, setNotificationBannerAlert] = useState<PriceAlert | null>(null);
     const alertsRef = useRef(alerts);
-    const [chartCoin, setChartCoin] = useState<CryptoPrice | null>(null); // State for the chart's selected coin
 
 
     useEffect(() => {
@@ -520,7 +519,6 @@ export const SpotLive: React.FC = () => {
                 if (prices.length > 0) {
                     setAllCoins(prices);
                     setActiveCoin(prices[0]);
-                    setChartCoin(prices[0]); // Also set the initial coin for the chart
                 }
             } catch (error) { console.error("Failed to fetch initial data for SpotLive:", error); }
             finally { setIsLoading(false); }
@@ -577,11 +575,6 @@ export const SpotLive: React.FC = () => {
                         const updatedActiveCoin = livePrices.find(c => c.id === activeCoin.id);
                         if (updatedActiveCoin) setActiveCoin(updatedActiveCoin);
                     }
-                    // Update Chart coin if it's still being tracked
-                    if (chartCoin) {
-                        const updatedChartCoin = livePrices.find(c => c.id === chartCoin.id);
-                         if (updatedChartCoin) setChartCoin(updatedChartCoin);
-                    }
                     checkAlerts(livePrices);
                 }
             } catch (error) {
@@ -592,7 +585,7 @@ export const SpotLive: React.FC = () => {
         const priceInterval = setInterval(fetchAndCheck, 7000);
         return () => clearInterval(priceInterval);
 
-    }, [isLoading, activeCoin, chartCoin]);
+    }, [isLoading, activeCoin]);
 
 
     // Subscribe to trades
@@ -653,11 +646,11 @@ export const SpotLive: React.FC = () => {
                     
                     {/* Top-Left Quadrant: Historical Chart */}
                     <div className="h-[50vh] lg:h-auto">
-                        {isLoading || !chartCoin ? <div className="h-full bg-gray-900/50 rounded-lg p-4 border border-gray-700/50 flex items-center justify-center"><LoadingSpinner /></div> : (
+                        {isLoading || !activeCoin ? <div className="h-full bg-gray-900/50 rounded-lg p-4 border border-gray-700/50 flex items-center justify-center"><LoadingSpinner /></div> : (
                             <HistoricalChart
                                 allCoins={allCoins}
-                                selectedCoin={chartCoin}
-                                onCoinChange={setChartCoin}
+                                selectedCoin={activeCoin}
+                                onCoinChange={setActiveCoin}
                             />
                         )}
                     </div>

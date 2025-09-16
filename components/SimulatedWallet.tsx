@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { tradeSimulatorService, Trade, WalletSettings } from '../services/tradeSimulatorService';
-import { SettingsIcon, CloseIcon, CheckCircleIcon, XCircleIcon, LineChartIcon } from './Icons';
-import { LoadingSpinner } from './LoadingSpinner';
+import { CloseIcon, LineChartIcon } from './Icons';
 import { CryptoChartModal } from './CryptoChartModal';
+import { LoadingSpinner } from './LoadingSpinner';
 
 
 const formatCurrency = (value: number | null | undefined) => {
@@ -271,7 +271,6 @@ const ClosedTradeCard: React.FC<{
 export const SimulatedWallet: React.FC = () => {
     const [allTrades, setAllTrades] = useState<Trade[]>(tradeSimulatorService.getAllTrades());
     const [settings, setSettings] = useState<WalletSettings>(tradeSimulatorService.getSettings());
-    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [tradeForChart, setTradeForChart] = useState<Trade | null>(null);
     const [webhookTestStatus, setWebhookTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
 
@@ -282,6 +281,7 @@ export const SimulatedWallet: React.FC = () => {
             setSettings(tradeSimulatorService.getSettings());
         };
         tradeSimulatorService.subscribe(updateState);
+        updateState(); // Initial load
         return () => tradeSimulatorService.unsubscribe(updateState);
     }, []);
     
@@ -296,47 +296,36 @@ export const SimulatedWallet: React.FC = () => {
     const winRate = closedTrades.length > 0 ? (wins / closedTrades.length) * 100 : 0;
     const aiConfidence = settings.aiConfidence;
 
-    const baseTradeSize = 1000;
-    const confidenceMultiplier = aiConfidence / 100;
-    const sizeAdjustment = baseTradeSize * (confidenceMultiplier - 0.75);
-    const nextTradeSize = baseTradeSize + sizeAdjustment;
-
     const handleSettingsChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value, type } = e.target;
-        const isCheckbox = type === 'checkbox';
-        const finalValue = isCheckbox ? (e.target as HTMLInputElement).checked : (type === 'range' ? parseFloat(value) : value);
+        
+        let finalValue: string | number | boolean;
+        if (type === 'range' || (type === 'number' && name === 'aiConfidence')) {
+            finalValue = parseFloat(value);
+        } else if (type === 'checkbox') {
+            finalValue = (e.target as HTMLInputElement).checked;
+        } else {
+            finalValue = value;
+        }
+
         tradeSimulatorService.updateSettings({ [name]: finalValue });
     };
 
     const handleTestWebhook = async () => {
-        if (!settings.webhookUrl) {
-            alert("Please enter a webhook URL before testing.");
-            return;
-        }
         setWebhookTestStatus('testing');
         try {
             await tradeSimulatorService.testWebhook();
             setWebhookTestStatus('success');
         } catch (error) {
-            console.error(error);
             setWebhookTestStatus('error');
+        } finally {
+            setTimeout(() => setWebhookTestStatus('idle'), 3000);
         }
-        setTimeout(() => setWebhookTestStatus('idle'), 4000);
     };
-
-    const handleReset = () => {
-        if (window.confirm("Are you sure you want to reset the wallet? All trade history and P/L will be permanently deleted.")) {
+    
+    const handleResetWallet = () => {
+        if(window.confirm("Are you sure you want to reset all trades and settings? This action cannot be undone.")) {
             tradeSimulatorService.resetWallet();
-            setIsSettingsOpen(false);
-        }
-    };
-
-    const getTestButtonContent = () => {
-        switch (webhookTestStatus) {
-            case 'testing': return <><LoadingSpinner /> Testing...</>;
-            case 'success': return <><CheckCircleIcon className="mr-1" /> Success!</>;
-            case 'error': return <><XCircleIcon className="mr-1" /> Failed</>;
-            default: return 'Test';
         }
     };
 
@@ -347,125 +336,7 @@ export const SimulatedWallet: React.FC = () => {
                     <h2 className="text-xl font-semibold text-white">AI Simulated Wallet</h2>
                     <p className="text-sm text-gray-400">Live performance tracking of the JaxSpot prediction pipeline.</p>
                 </div>
-                <button
-                    onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-                    className="p-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
-                    aria-label={isSettingsOpen ? "Close settings" : "Open settings"}
-                >
-                    {isSettingsOpen ? <CloseIcon /> : <SettingsIcon />}
-                </button>
             </div>
-
-            {isSettingsOpen && (
-                <div className="p-4 border-b border-gray-700 bg-gray-900/50 space-y-6 animate-fade-in-down">
-                    <div>
-                        <h3 className="text-lg font-bold text-purple-400 mb-3">AI Trading Strategy</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label htmlFor="riskTolerance" className="block text-sm font-medium text-gray-300 mb-1">Risk Tolerance</label>
-                                <select
-                                    id="riskTolerance"
-                                    name="riskTolerance"
-                                    value={settings.riskTolerance}
-                                    onChange={handleSettingsChange}
-                                    className="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
-                                >
-                                    <option>Conservative</option>
-                                    <option>Moderate</option>
-                                    <option>Aggressive</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label htmlFor="investmentStyle" className="block text-sm font-medium text-gray-300 mb-1">Investment Style</label>
-                                <select
-                                    id="investmentStyle"
-                                    name="investmentStyle"
-                                    value={settings.investmentStyle}
-                                    onChange={handleSettingsChange}
-                                    className="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
-                                >
-                                    <option>Scalping</option>
-                                    <option>Day Trading</option>
-                                    <option>Swing Trading</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div className="mt-4">
-                            <label htmlFor="aiConfidence" className="flex justify-between items-center text-sm font-medium text-gray-300 mb-1">
-                                <span>Manual AI Confidence</span>
-                                <span className="font-mono text-purple-300 text-base">{settings.aiConfidence.toFixed(1)}%</span>
-                            </label>
-                            <input
-                                id="aiConfidence"
-                                name="aiConfidence"
-                                type="range"
-                                min="50"
-                                max="95"
-                                step="0.1"
-                                value={settings.aiConfidence}
-                                onChange={handleSettingsChange}
-                                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer confidence-slider"
-                            />
-                            <p className="text-xs text-gray-500 mt-1">Adjusts the AI's confidence, which impacts trade size and the learning model.</p>
-                        </div>
-                        <div className="mt-4 pt-4 border-t border-gray-700/50 flex justify-between items-center">
-                            <span className="text-sm font-medium text-gray-300">Active AI Model Version</span>
-                            <span className="font-mono text-white bg-gray-700 px-3 py-1 rounded-md text-sm">v2.5.1</span>
-                        </div>
-                    </div>
-                    
-                    <div className="pt-6 border-t border-gray-700/50">
-                        <h3 className="text-lg font-bold text-purple-400 mb-3">Webhook Integration</h3>
-                        <div className="space-y-4">
-                            <div className="flex items-center justify-between">
-                                <label htmlFor="webhookEnabled" className="font-medium text-gray-300">Enable Webhooks</label>
-                                <label htmlFor="webhookEnabled" className="relative inline-flex items-center cursor-pointer">
-                                  <input type="checkbox" name="webhookEnabled" id="webhookEnabled" className="sr-only peer" checked={settings.webhookEnabled} onChange={handleSettingsChange} />
-                                  <div className="w-11 h-6 bg-gray-600 rounded-full peer peer-focus:ring-2 peer-focus:ring-purple-500 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
-                                </label>
-                            </div>
-                             <div>
-                                <label htmlFor="webhookUrl" className="block text-sm font-medium text-gray-300 mb-1">Webhook URL</label>
-                                <div className="flex items-center space-x-2">
-                                    <input
-                                        type="url"
-                                        id="webhookUrl"
-                                        name="webhookUrl"
-                                        value={settings.webhookUrl}
-                                        onChange={handleSettingsChange}
-                                        placeholder="https://your-endpoint.com/webhook"
-                                        className="flex-grow bg-gray-700 border border-gray-600 rounded-lg p-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50"
-                                        disabled={!settings.webhookEnabled}
-                                    />
-                                    <button 
-                                        onClick={handleTestWebhook}
-                                        disabled={!settings.webhookEnabled || webhookTestStatus === 'testing'}
-                                        className={`px-4 py-2 text-sm font-semibold rounded-lg transition-colors flex items-center justify-center min-w-[90px] ${
-                                            webhookTestStatus === 'success' ? 'bg-green-600' :
-                                            webhookTestStatus === 'error' ? 'bg-red-600' :
-                                            'bg-blue-600 hover:bg-blue-700'
-                                        } disabled:bg-gray-600 disabled:cursor-not-allowed`}
-                                    >
-                                        {getTestButtonContent()}
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="pt-6 border-t border-gray-700/50">
-                        <h3 className="text-lg font-bold text-purple-400 mb-2">Wallet Management</h3>
-                        <button
-                            onClick={handleReset}
-                            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition-colors w-full md:w-auto"
-                        >
-                            Reset Wallet & History
-                        </button>
-                        <p className="text-xs text-gray-500 mt-2">Warning: This action is permanent and cannot be undone.</p>
-                    </div>
-                </div>
-            )}
-
 
             <div className="p-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 border-b border-gray-700">
                 <MetricCard 
@@ -484,21 +355,73 @@ export const SimulatedWallet: React.FC = () => {
                     description={`${wins} Wins / ${closedTrades.length - wins} Losses`}
                 />
                 <MetricCard 
-                    title="AI Confidence" 
+                    title="Execution Confidence" 
                     value={`${aiConfidence.toFixed(1)}%`}
-                    description="Adapts based on performance"
+                    description="AI trade execution threshold"
                 />
                  <MetricCard 
-                    title="Total Trades" 
+                    title="Closed Trades" 
                     value={closedTrades.length.toString()}
-                    description={`Next Trade Size: ${formatCurrency(nextTradeSize)}`}
+                    description={`${openTrades.length} positions currently open`}
                 />
             </div>
             
             <div className="flex-1 p-4 overflow-y-auto space-y-6">
+                <div className="bg-gray-800 rounded-lg border border-gray-700 p-4">
+                    <h3 className="text-lg font-bold text-purple-400 mb-4">AI Trading Strategy & Settings</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <div className="space-y-4">
+                            <div>
+                                <label htmlFor="riskTolerance" className="block text-sm font-medium text-gray-300 mb-1">Risk Tolerance</label>
+                                <select id="riskTolerance" name="riskTolerance" value={settings.riskTolerance} onChange={handleSettingsChange} className="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+                                    <option>Conservative</option><option>Moderate</option><option>Aggressive</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label htmlFor="investmentStyle" className="block text-sm font-medium text-gray-300 mb-1">Investment Style</label>
+                                <select id="investmentStyle" name="investmentStyle" value={settings.investmentStyle} onChange={handleSettingsChange} className="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+                                    <option>Scalping</option><option>Day Trading</option><option>Swing Trading</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label htmlFor="aiConfidence" className="flex justify-between items-center text-sm font-medium text-gray-300 mb-1">
+                                    <span>Execution Confidence</span>
+                                    <span className="font-mono text-purple-300 text-base">{settings.aiConfidence.toFixed(1)}%</span>
+                                </label>
+                                <input id="aiConfidence" name="aiConfidence" type="range" min="50" max="95" step="0.1" value={settings.aiConfidence} onChange={handleSettingsChange} className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer confidence-slider" />
+                                <p className="text-xs text-gray-500 mt-1">Minimum AI confidence to auto-execute a trade from the pipeline.</p>
+                            </div>
+                        </div>
+
+                        <div className="space-y-4">
+                             <div>
+                                <label htmlFor="webhookUrl" className="block text-sm font-medium text-gray-300 mb-1">Webhook URL (Optional)</label>
+                                <input type="text" id="webhookUrl" name="webhookUrl" value={settings.webhookUrl} onChange={handleSettingsChange} placeholder="https://..." className="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-500"/>
+                             </div>
+                             <div className="flex items-center justify-between">
+                                <label htmlFor="webhookEnabled" className="flex items-center cursor-pointer">
+                                    <input type="checkbox" id="webhookEnabled" name="webhookEnabled" checked={settings.webhookEnabled} onChange={handleSettingsChange} className="h-4 w-4 rounded border-gray-500 bg-gray-700 text-purple-600 focus:ring-purple-500" />
+                                    <span className="ml-2 text-sm text-gray-300">Enable Webhooks</span>
+                                </label>
+                                 <button onClick={handleTestWebhook} disabled={!settings.webhookUrl || !settings.webhookEnabled || webhookTestStatus !== 'idle'} className="px-3 py-1.5 text-xs font-semibold rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-blue-500/20 text-blue-300 hover:bg-blue-500/30">
+                                    {webhookTestStatus === 'testing' ? <LoadingSpinner /> : webhookTestStatus === 'success' ? 'Success!' : webhookTestStatus === 'error' ? 'Failed!' : 'Test'}
+                                </button>
+                            </div>
+                             <p className="text-xs text-gray-500 -mt-2">Sends a POST request with trade data when a trade is opened or closed.</p>
+                        </div>
+                    </div>
+                     <div className="mt-6 pt-4 border-t border-gray-700/50 flex justify-end">
+                        <button onClick={handleResetWallet} className="bg-red-600/20 hover:bg-red-600/30 text-red-300 font-bold py-2 px-4 rounded-lg transition-colors text-sm">
+                            Reset Wallet & Settings
+                        </button>
+                    </div>
+                </div>
+
                 <div>
                     <h3 className="text-lg font-bold text-purple-400 mb-2">Open Positions ({openTrades.length})</h3>
-                    {/* Desktop Table */}
                     <div className="overflow-x-auto bg-gray-800 rounded-lg border border-gray-700 hidden md:block">
                        <table className="w-full text-sm text-left">
                             <thead className="bg-gray-700/50 text-xs text-gray-400 uppercase">
@@ -523,7 +446,6 @@ export const SimulatedWallet: React.FC = () => {
                             </tbody>
                         </table>
                     </div>
-                    {/* Mobile Cards */}
                     <div className="md:hidden space-y-3">
                         {openTrades.length > 0 ? (
                             openTrades.map(trade => <OpenPositionCard key={trade.id} trade={trade} onViewChart={() => setTradeForChart(trade)} />)
@@ -535,7 +457,6 @@ export const SimulatedWallet: React.FC = () => {
 
                 <div>
                     <h3 className="text-lg font-bold text-purple-400 mb-2">Trade History ({closedTrades.length})</h3>
-                    {/* Desktop Table */}
                     <div className="overflow-x-auto bg-gray-800 rounded-lg border border-gray-700 hidden md:block">
                         <table className="w-full text-sm text-left">
                              <thead className="bg-gray-700/50 text-xs text-gray-400 uppercase">
@@ -569,7 +490,6 @@ export const SimulatedWallet: React.FC = () => {
                             </tbody>
                         </table>
                     </div>
-                    {/* Mobile Cards */}
                     <div className="md:hidden space-y-3">
                          {closedTrades.length > 0 ? (
                             closedTrades.map(trade => (
@@ -592,54 +512,19 @@ export const SimulatedWallet: React.FC = () => {
                 />
             )}
             <style>{`
-                @keyframes fade-in-down {
-                from { opacity: 0; transform: translateY(-10px); }
-                to { opacity: 1; transform: translateY(0); }
-                }
-                .animate-fade-in-down {
-                animation: fade-in-down 0.3s ease-out forwards;
-                }
-                @keyframes fade-in-down-sm {
-                    from { opacity: 0; transform: translateY(-5px); }
-                    to { opacity: 1; transform: translateY(0); }
-                }
-                .animate-fade-in-down-sm {
-                    animation: fade-in-down-sm 0.3s ease-out forwards;
-                }
-                /* --- Custom Range Slider Styles --- */
                 .confidence-slider {
-                    -webkit-appearance: none;
-                    appearance: none;
-                    width: 100%;
-                    height: 6px;
-                    background: #374151; /* gray-700 */
-                    border-radius: 9999px;
-                    outline: none;
-                    opacity: 0.9;
-                    transition: opacity 0.2s;
+                    -webkit-appearance: none; appearance: none; width: 100%; height: 6px;
+                    background: #374151; border-radius: 9999px; outline: none; opacity: 0.9; transition: opacity 0.2s;
                 }
-                .confidence-slider:hover {
-                    opacity: 1;
-                }
+                .confidence-slider:hover { opacity: 1; }
                 .confidence-slider::-webkit-slider-thumb {
-                    -webkit-appearance: none;
-                    appearance: none;
-                    width: 20px;
-                    height: 20px;
-                    background: #a855f7; /* purple-500 */
-                    cursor: pointer;
-                    border-radius: 9999px;
-                    border: 3px solid #f9fafb; /* gray-50 */
-                    box-shadow: 0 0 5px rgba(168, 85, 247, 0.5);
+                    -webkit-appearance: none; appearance: none; width: 20px; height: 20px;
+                    background: #a855f7; cursor: pointer; border-radius: 9999px;
+                    border: 3px solid #f9fafb; box-shadow: 0 0 5px rgba(168, 85, 247, 0.5);
                 }
                 .confidence-slider::-moz-range-thumb {
-                    width: 20px;
-                    height: 20px;
-                    background: #a855f7; /* purple-500 */
-                    cursor: pointer;
-                    border-radius: 9999px;
-                    border: 3px solid #f9fafb; /* gray-50 */
-                    box-shadow: 0 0 5px rgba(168, 85, 247, 0.5);
+                    width: 20px; height: 20px; background: #a855f7; cursor: pointer;
+                    border-radius: 9999px; border: 3px solid #f9fafb; box-shadow: 0 0 5px rgba(168, 85, 247, 0.5);
                 }
             `}</style>
         </div>

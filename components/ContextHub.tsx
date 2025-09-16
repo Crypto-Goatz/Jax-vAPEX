@@ -1,10 +1,9 @@
-
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { ChatContext, SocialPost } from '../types';
 import type { CryptoPrice } from '../services/cryptoService';
 import { fetchHistoricalData, HistoricalData } from '../services/cryptoService';
 import { LoadingSpinner } from './LoadingSpinner';
-import { XIcon, JaxIcon, PaperclipIcon, CloseIcon } from './Icons';
+import { XIcon, JaxIcon, PaperclipIcon, CloseIcon, TrendingUpIcon } from './Icons';
 
 // --- SUB-COMPONENTS ---
 
@@ -131,6 +130,32 @@ const LivePriceTicker: React.FC<{ liveCoin: CryptoPrice }> = ({ liveCoin }) => {
     );
 };
 
+const ConversationStarter: React.FC<{ allCoins: CryptoPrice[] }> = ({ allCoins }) => {
+    const topGainer = useMemo(() => {
+        if (allCoins.length === 0) return null;
+        return [...allCoins].sort((a, b) => b.change24h - a.change24h)[0];
+    }, [allCoins]);
+
+    return (
+        <div className="flex flex-col items-center justify-center h-full text-center text-gray-500 p-4">
+            <JaxIcon className="w-12 h-12 mb-3 text-gray-600"/>
+            <p className="font-semibold">What are we exploring today?</p>
+            <p className="text-sm">Ask me about a specific asset, or we can look at what's moving.</p>
+            {topGainer && (
+                <div className="mt-6 w-full p-3 bg-gray-800/50 rounded-lg border border-gray-700 text-left">
+                    <p className="text-xs font-bold text-purple-300 flex items-center gap-1.5"><TrendingUpIcon className="w-4 h-4" /> CONVERSATION STARTER</p>
+                    <p className="text-sm text-gray-300 mt-1">
+                        The top gainer right now is <span className="font-bold text-white">{topGainer.name} ({topGainer.symbol})</span>,
+                        up <span className="font-bold text-green-400">{topGainer.change24h.toFixed(2)}%</span> in the last 24 hours.
+                        Want to analyze its potential?
+                    </p>
+                </div>
+            )}
+        </div>
+    );
+};
+
+
 // --- IMAGE UPLOAD COMPONENT ---
 const ImageUploader: React.FC<{
     onImageUpload: (base64: string | null, mimeType: string | null) => void;
@@ -168,28 +193,13 @@ const ImageUploader: React.FC<{
         }
     }, [onImageUpload]);
 
-    const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
-        e.preventDefault();
-        e.stopPropagation();
-    }, []);
-
-    const handleDragEnter = useCallback((e: React.DragEvent<HTMLDivElement>) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setIsDragging(true);
-    }, []);
-    
-    const handleDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setIsDragging(false);
-    }, []);
+    const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => { e.preventDefault(); e.stopPropagation(); }, []);
+    const handleDragEnter = useCallback((e: React.DragEvent<HTMLDivElement>) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); }, []);
+    const handleDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>) => { e.preventDefault(); e.stopPropagation(); setIsDragging(false); }, []);
 
     const handleRemoveImage = () => {
         onImageUpload(null, null);
-        if (fileInputRef.current) {
-            fileInputRef.current.value = "";
-        }
+        if (fileInputRef.current) fileInputRef.current.value = "";
     };
 
     return (
@@ -198,36 +208,19 @@ const ImageUploader: React.FC<{
             {attachedImage ? (
                 <div className="relative group">
                     <img src={`data:${attachedImage.mimeType};base64,${attachedImage.data}`} alt="Uploaded chart" className="rounded-lg w-full h-auto object-contain max-h-48" />
-                    <button 
-                        onClick={handleRemoveImage}
-                        className="absolute top-2 right-2 p-1.5 bg-black/60 rounded-full text-white hover:bg-black/80 transition-opacity opacity-0 group-hover:opacity-100"
-                        aria-label="Remove image"
-                    >
+                    <button onClick={handleRemoveImage} className="absolute top-2 right-2 p-1.5 bg-black/60 rounded-full text-white hover:bg-black/80 transition-opacity opacity-0 group-hover:opacity-100" aria-label="Remove image">
                         <CloseIcon className="w-4 h-4" />
                     </button>
                 </div>
             ) : (
                 <div 
-                    onDrop={handleDrop}
-                    onDragOver={handleDragOver}
-                    onDragEnter={handleDragEnter}
-                    onDragLeave={handleDragLeave}
-                    className={`relative flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-lg cursor-pointer transition-colors
-                        ${isDragging ? 'border-purple-500 bg-purple-500/10' : 'border-gray-600 hover:border-gray-500 bg-gray-800/50'}`
-                    }
+                    onDrop={handleDrop} onDragOver={handleDragOver} onDragEnter={handleDragEnter} onDragLeave={handleDragLeave}
+                    className={`relative flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${isDragging ? 'border-purple-500 bg-purple-500/10' : 'border-gray-600 hover:border-gray-500 bg-gray-800/50'}`}
                     onClick={() => fileInputRef.current?.click()}
                 >
-                    <input
-                        type="file"
-                        ref={fileInputRef}
-                        onChange={handleFileSelect}
-                        accept="image/*"
-                        className="hidden"
-                    />
+                    <input type="file" ref={fileInputRef} onChange={handleFileSelect} accept="image/*" className="hidden" />
                     <PaperclipIcon className="w-8 h-8 text-gray-500 mb-2" />
-                    <p className="text-sm text-center text-gray-400">
-                        <span className="font-semibold text-purple-400">Click to upload</span> or drag and drop
-                    </p>
+                    <p className="text-sm text-center text-gray-400"><span className="font-semibold text-purple-400">Click to upload</span> or drag and drop</p>
                     <p className="text-xs text-center text-gray-500">PNG, JPG, GIF up to 10MB</p>
                 </div>
             )}
@@ -237,7 +230,6 @@ const ImageUploader: React.FC<{
 
 
 // --- MAIN COMPONENT ---
-
 interface ContextHubProps {
     context: ChatContext | null;
     allCoins: CryptoPrice[];
@@ -263,11 +255,7 @@ export const ContextHub: React.FC<ContextHubProps> = ({ context, allCoins, onIma
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 <ImageUploader onImageUpload={onImageUpload} attachedImage={attachedImage} />
                 {!context && !attachedImage ? (
-                    <div className="flex flex-col items-center justify-center h-full text-center text-gray-500 pt-8">
-                        <JaxIcon className="w-12 h-12 mb-3 text-gray-600"/>
-                        <p className="font-semibold">Contextual data will appear here.</p>
-                        <p className="text-sm">Ask about a specific crypto or upload a chart.</p>
-                    </div>
+                    <ConversationStarter allCoins={allCoins} />
                 ) : (
                     <>
                         {liveCoinData ? (

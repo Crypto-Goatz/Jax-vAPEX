@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { googleDriveService, UserProfile } from '../services/googleDriveService';
-import { GoogleDriveIcon, TradingViewIcon, LunarCrushIcon, FlipsideIcon, DefiLlamaIcon, DexToolsIcon, CoinglassIcon, DexScreenerIcon } from './Icons';
+import { TradingViewIcon, LunarCrushIcon, FlipsideIcon, DefiLlamaIcon, DexToolsIcon, CoinglassIcon, DexScreenerIcon } from './Icons';
 import { LoadingSpinner } from './LoadingSpinner';
 
 // --- Status Indicator Component ---
@@ -47,27 +46,12 @@ const StatusIndicator: React.FC<{ status: Status }> = ({ status }) => {
 
 // --- Main DataSources Component ---
 export const DataSources: React.FC = () => {
-  const [profile, setProfile] = useState<UserProfile | null>(googleDriveService.getProfile());
-  const [isAuthenticated, setIsAuthenticated] = useState(googleDriveService.isAuthenticated());
-  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
-
   // State for TradingView connection
   const [tvApiKey, setTvApiKey] = useState('');
   const [tvApiSecret, setTvApiSecret] = useState('');
   const [tvConnectionStatus, setTvConnectionStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle');
   const [tvConnectionTimestamp, setTvConnectionTimestamp] = useState<Date | null>(null);
   const [tvError, setTvError] = useState('');
-
-  useEffect(() => {
-    const handleAuthChange = () => {
-      setIsAuthenticated(googleDriveService.isAuthenticated());
-      setProfile(googleDriveService.getProfile());
-      setIsGoogleLoading(false);
-    };
-
-    googleDriveService.subscribe(handleAuthChange);
-    return () => googleDriveService.unsubscribe(handleAuthChange);
-  }, []);
 
   const getTvStatus = (): Status => {
     switch(tvConnectionStatus) {
@@ -77,20 +61,6 @@ export const DataSources: React.FC = () => {
         case 'idle': return 'disconnected';
         default: return 'disconnected';
     }
-  };
-
-  const handleSignIn = async () => {
-    setIsGoogleLoading(true);
-    try {
-      await googleDriveService.signIn();
-    } catch (error) {
-      console.error("Sign-in failed:", error);
-      setIsGoogleLoading(false);
-    }
-  };
-
-  const handleSignOut = () => {
-    googleDriveService.signOut();
   };
   
   const handleTradingViewConnect = () => {
@@ -122,47 +92,6 @@ export const DataSources: React.FC = () => {
         <p className="text-sm text-gray-400">Connect your accounts to use as context for the AI.</p>
       </div>
       <div className="flex-1 p-4 overflow-y-auto space-y-6">
-        {/* Google Drive Card */}
-        <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <GoogleDriveIcon />
-              <div>
-                <div className="flex items-center space-x-2.5">
-                    <h3 className="text-lg font-bold text-white">Google Drive</h3>
-                    <StatusIndicator status={isAuthenticated ? 'connected' : 'disconnected'} />
-                </div>
-                <p className="text-sm text-gray-400">Access documents to provide context to the AI.</p>
-              </div>
-            </div>
-            {isAuthenticated ? (
-              <button
-                onClick={handleSignOut}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition-colors"
-              >
-                Disconnect
-              </button>
-            ) : (
-              <button
-                onClick={handleSignIn}
-                disabled={isGoogleLoading}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white font-semibold rounded-lg transition-colors flex items-center justify-center min-w-[120px]"
-              >
-                {isGoogleLoading ? <LoadingSpinner /> : 'Connect'}
-              </button>
-            )}
-          </div>
-          {isAuthenticated && profile && (
-            <div className="mt-6 pt-4 border-t border-gray-700 flex items-center space-x-4">
-              <img src={profile.picture} alt="User profile" className="w-12 h-12 rounded-full" />
-              <div>
-                <p className="font-semibold text-white">{profile.name}</p>
-                <p className="text-sm text-gray-400">{profile.email}</p>
-              </div>
-            </div>
-          )}
-        </div>
-
         {/* TradingView Card */}
         <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
           <div className="flex items-center justify-between">
