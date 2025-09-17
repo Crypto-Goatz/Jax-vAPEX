@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { ChatInterface } from './components/ChatInterface';
 import { SideNav } from './components/SideNav';
@@ -13,13 +12,19 @@ import { ActiveLearning } from './components/ActiveLearning';
 import { Experiments } from './components/Experiments';
 import { JaxSignals } from './components/JaxSignals';
 import { SignalStudio } from './components/SignalStudio';
+import { MacroView } from './components/MacroView';
 import { MenuIcon, CloseIcon } from './components/Icons';
 import { tradeSimulatorService, Trade } from './services/tradeSimulatorService';
 import { signalsService } from './services/signalsService';
 import { fetchLivePricing, CryptoPrice, GlobalLiquidity, NewsSentiment, getGlobalLiquidity, getNewsSentiment } from './services/cryptoService';
 import { PipelineFooter } from './components/PipelineFooter';
+import { Dashboard } from './components/Dashboard';
+import { macroService, MacroData, HistoricalMacroDataPoint } from './services/macroService';
+import { btcHistoryService, BtcHistoryEntry } from './services/btcHistoryService';
+import { watchlistService } from './services/watchlistService';
+import { CoinDetailModal } from './components/CoinDetailModal';
 
-export type ActiveView = 'chat' | 'specs' | 'pricing' | 'data' | 'pipeline' | 'trends' | 'wallet' | 'rewind' | 'learning' | 'experiments' | 'signals' | 'signalStudio';
+export type ActiveView = 'chat' | 'specs' | 'pricing' | 'data' | 'pipeline' | 'trends' | 'wallet' | 'rewind' | 'learning' | 'experiments' | 'signals' | 'signalStudio' | 'dashboard' | 'macro';
 
 export interface PipelineCryptoPrice extends CryptoPrice {
   confidence?: number;
@@ -91,7 +96,7 @@ const RENDER_PIPELINE_STAGES = [...PIPELINE_STAGES, EXECUTION_STAGE_DEFINITION, 
 
 const App: React.FC = () => {
   const [isNavOpen, setIsNavOpen] = useState(true);
-  const [activeView, setActiveView] = useState<ActiveView>('chat');
+  const [activeView, setActiveView] = useState<ActiveView>('dashboard');
   const [isFooterExpanded, setIsFooterExpanded] = useState(false);
   
   // --- Centralized Pipeline State ---
@@ -105,28 +110,32 @@ const App: React.FC = () => {
   const [globalLiquidity, setGlobalLiquidity] = useState<GlobalLiquidity | null>(null);
   const [newsSentiment, setNewsSentiment] = useState<NewsSentiment | null>(null);
 
-  // Automatically collapse footer on chat view
+  // --- NEW: State for dashboard data ---
+  const [macroData, setMacroData] = useState<MacroData | null>(null);
+  const [watchlist, setWatchlist] = useState<string[]>(watchlistService.getWatchlistSymbols());
+  
+  // --- NEW: State for coin detail modal ---
+  const [detailCoin, setDetailCoin] = useState<CryptoPrice | null>(null);
+
+  // --- NEW: State for Macro view ---
+  const [historicalMacroData, setHistoricalMacroData] = useState<HistoricalMacroDataPoint[]>([]);
+  const [allBtcHistory, setAllBtcHistory] = useState<BtcHistoryEntry[]>([]);
+
+
+  // Automatically collapse footer on non-pipeline/chat views
   useEffect(() => {
-    if (activeView === 'chat' && isFooterExpanded) {
+    if (activeView !== 'pipeline' && activeView !== 'chat' && isFooterExpanded) {
         setIsFooterExpanded(false);
     }
   }, [activeView, isFooterExpanded]);
 
-  // Background wallet updater
+  // Watchlist subscription
   useEffect(() => {
-    const updateInterval = setInterval(async () => {
-      try {
-        const livePrices = await fetchLivePricing();
-        if (livePrices.length > 0) {
-          tradeSimulatorService.updateOpenTrades(livePrices);
-        }
-      } catch (error) {
-        console.error("Background price refresh for wallet failed:", error);
-      }
-    }, 10000);
-    return () => clearInterval(updateInterval);
+    const updateWatchlist = () => setWatchlist(watchlistService.getWatchlistSymbols());
+    watchlistService.subscribe(updateWatchlist);
+    return () => watchlistService.unsubscribe(updateWatchlist);
   }, []);
-  
+
   // Trade subscription for pipeline footer and stage 5
   useEffect(() => {
     const updateTrades = () => {
@@ -137,22 +146,25 @@ const App: React.FC = () => {
     return () => tradeSimulatorService.unsubscribe(updateTrades);
   }, []);
 
-  // --- Pipeline Data Fetching and Simulation Logic ---
+  // --- Initial Data Fetch and Simulation (runs once) ---
   useEffect(() => {
-    let isMounted = true;
-    let timeoutId: number;
-
-    const runSimulation = async () => {
-        if (!isMounted) return;
-
+    const runInitialLoad = async () => {
         try {
-            // This now fetches from the new primary source, with fallbacks
-            const prices = await fetchLivePricing();
-            if (!isMounted) return;
+            // Initialize services that fetch data
+            btcHistoryService.init();
 
-            // NEW: Fetch global and news data from the cached source
+            const prices = await fetchLivePricing();
+
+            // This is important for other parts of the app that rely on updated trades.
+            if (prices.length > 0) {
+              tradeSimulatorService.updateOpenTrades(prices);
+            }
+
             setGlobalLiquidity(await getGlobalLiquidity());
             setNewsSentiment(await getNewsSentiment());
+            setMacroData(await macroService.getMacroData());
+            setHistoricalMacroData(await macroService.getHistoricalMacroData());
+            setAllBtcHistory(btcHistoryService.getBtcHistory());
             
             if (isPipelineLoading && prices.length > 0) setIsPipelineLoading(false);
             
@@ -160,10 +172,9 @@ const App: React.FC = () => {
 
             signalsService.checkForSignalTriggers(prices);
 
-            // --- NEW EXCLUSIVE PIPELINE LOGIC ---
+            // --- Single run of pipeline logic ---
             const newPipeline: PipelineState = { stage1: [], stage2: [], stage3: [], stage4: [], stage5: [], stage6: [] };
 
-            // STAGE 5: Active Trades
             const currentOpenTrades = tradeSimulatorService.getAllTrades().filter(t => t.status === 'open');
             newPipeline.stage5 = currentOpenTrades.map(trade => {
                 const liveCoinData = prices.find(p => p.id === trade.coin.id) || trade.coin;
@@ -171,14 +182,12 @@ const App: React.FC = () => {
             });
             const openOrRecentlyClosedTradeIds = new Set(tradeSimulatorService.getAllTrades().map(t => t.coin.id));
 
-            // STAGE 6: Recommended Holds (Profitable closed trades in last 7 days)
             const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
             const recentProfitableClosed = tradeSimulatorService.getAllTrades().filter(
                 t => t.status === 'closed' && (t.pnl ?? 0) > 0 && t.closeTimestamp && t.closeTimestamp > sevenDaysAgo
             );
             const holdingMap = new Map<string, Trade>();
             recentProfitableClosed.forEach(trade => {
-                // Keep only the most recent profitable trade for each symbol
                 if (!holdingMap.has(trade.coin.id) || trade.closeTimestamp! > holdingMap.get(trade.coin.id)!.closeTimestamp!) {
                     holdingMap.set(trade.coin.id, trade);
                 }
@@ -186,54 +195,43 @@ const App: React.FC = () => {
             newPipeline.stage6 = Array.from(holdingMap.values()).map(trade => ({...trade.coin, pnl: trade.pnl, entryPrice: trade.entryPrice, id: trade.id }));
             const holdingIds = new Set(newPipeline.stage6.map(c => c.id));
 
-            // STAGES 1-4: Process remaining coins through the funnel
             const candidates = prices.filter(c => !openOrRecentlyClosedTradeIds.has(c.id) && !holdingIds.has(c.id));
 
             candidates.forEach(coin => {
                 const passesS1 = PIPELINE_STAGES[0].passCondition(coin);
                 if (!passesS1) {
-                     newPipeline.stage1.push(coin); // Add to S1 to show it's being watched but hasn't passed
+                     newPipeline.stage1.push(coin);
                      return;
                 }
-
                 const passesS2 = PIPELINE_STAGES[1].passCondition(coin);
                 const passesS3 = PIPELINE_STAGES[2].passCondition(coin);
-
                 if (passesS2 && passesS3) {
-                    // Passed all filters, becomes an execution candidate
                     const momentumScore = Math.min(1, Math.max(0, (coin.change24h - 2) / (25 - 2)));
                     const mcap = coin.marketCap ?? 100_000_000;
                     const mcapScore = Math.min(1, Math.max(0, (Math.log10(mcap) - 8) / (12.7 - 8)));
                     const confidence = (momentumScore * 0.7 + mcapScore * 0.3) * 100;
                     newPipeline.stage4.push({ ...coin, confidence });
                 } else if (passesS2) {
-                    // Passed S1 and S2, but failed S3 (Risk Screen)
                     newPipeline.stage3.push(coin);
                 } else {
-                    // Passed S1, but failed S2 (Liquidity Screen)
                     newPipeline.stage2.push(coin);
                 }
             });
 
-            // Auto-execute trades from Stage 4
-            // Fix: Corrected property name from 'executionConfidenceThreshold' to 'aiConfidence' to match the WalletSettings interface and fix a TypeError.
             const executionThreshold = tradeSimulatorService.getSettings().aiConfidence;
             for (const coin of newPipeline.stage4) {
                  if ((coin.confidence ?? 0) > executionThreshold) {
                     tradeSimulatorService.executeTrade(coin, 'buy');
                  }
             }
-
-            // This logic can be simplified as stages are now exclusive, but we'll keep it for exit animations.
+            
             setPipeline(currentPipeline => {
                 const newExitedState: ExitedState = { stage1: null, stage2: null, stage3: null, stage4: null, stage5: null, stage6: null };
-                
-                 ALL_STAGE_DEFINITIONS.slice(0, 4).forEach(stage => { // only for funnel stages
+                ALL_STAGE_DEFINITIONS.slice(0, 4).forEach(stage => {
                     const previousStageCoins = currentPipeline[stage.id] ?? [];
                     const previousIds = new Set(previousStageCoins.map(c => c.id));
                     const currentIds = new Set(newPipeline[stage.id]?.map(c => c.id) ?? []);
                     let lastExitedCoin = null;
-
                     for (const id of previousIds) {
                         if (!currentIds.has(id)) {
                             const exitedCoinData = previousStageCoins.find(c => c.id === id);
@@ -253,20 +251,13 @@ const App: React.FC = () => {
             });
 
         } catch (error) {
-            console.error("Error during simulation tick:", error);
-        } finally {
-            if (isMounted) {
-                timeoutId = window.setTimeout(runSimulation, 5000);
-            }
+            console.error("Error during initial data load:", error);
+            setIsPipelineLoading(false); // Stop loading indicator on error
         }
     };
 
-    runSimulation();
+    runInitialLoad();
 
-    return () => {
-        isMounted = false;
-        clearTimeout(timeoutId);
-    };
   }, []);
 
 
@@ -288,11 +279,12 @@ const App: React.FC = () => {
             {isNavOpen ? <CloseIcon /> : <MenuIcon />}
           </button>
 
+          {activeView === 'dashboard' && <Dashboard allCoins={allCoins} newsSentiment={newsSentiment} macroData={macroData} watchlist={watchlist} onShowCoinDetail={(coin) => setDetailCoin(coin)} />}
           {activeView === 'chat' && <ChatInterface allCoins={allCoins} />}
           {activeView === 'specs' && <SpecDetails />}
           {activeView === 'pricing' && <SpotLive />}
           {activeView === 'data' && <DataSources />}
-          {activeView === 'pipeline' && <PredictionPipeline pipeline={pipeline} exitedCoins={exitedCoins} allCoins={allCoins} isLoading={isPipelineLoading} stages={RENDER_PIPELINE_STAGES} />}
+          {activeView === 'pipeline' && <PredictionPipeline pipeline={pipeline} exitedCoins={exitedCoins} allCoins={allCoins} isLoading={isPipelineLoading} stages={RENDER_PIPELINE_STAGES} onShowCoinDetail={(coin) => setDetailCoin(coin)} />}
           {activeView === 'trends' && <MarketTrends allCoins={allCoins} newsSentiment={newsSentiment} />}
           {activeView === 'wallet' && <SimulatedWallet />}
           {activeView === 'rewind' && <MarketRewind />}
@@ -300,6 +292,7 @@ const App: React.FC = () => {
           {activeView === 'experiments' && <Experiments allCoins={allCoins} />}
           {activeView === 'signals' && <JaxSignals allCoins={allCoins} />}
           {activeView === 'signalStudio' && <SignalStudio allCoins={allCoins} />}
+          {activeView === 'macro' && <MacroView btcHistory={allBtcHistory} macroHistory={historicalMacroData} />}
         </main>
 
         <SideNav
@@ -310,12 +303,15 @@ const App: React.FC = () => {
           globalLiquidity={globalLiquidity}
         />
       </div>
-      <PipelineFooter
-        pipeline={pipeline}
-        isNavOpen={isNavOpen}
-        isExpanded={isFooterExpanded}
-        onToggle={() => setIsFooterExpanded(!isFooterExpanded)}
-      />
+       {(activeView === 'pipeline' || activeView === 'chat') && (
+        <PipelineFooter
+            pipeline={pipeline}
+            isNavOpen={isNavOpen}
+            isExpanded={isFooterExpanded}
+            onToggle={() => setIsFooterExpanded(!isFooterExpanded)}
+        />
+       )}
+       {detailCoin && <CoinDetailModal coin={detailCoin} onClose={() => setDetailCoin(null)} />}
     </div>
   );
 };

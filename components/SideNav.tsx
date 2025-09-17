@@ -57,6 +57,7 @@ const navItems = [
             { view: 'pricing', label: 'SpotLive', icon: <ChartBarIcon /> },
             { view: 'trends', label: 'Market Trends', icon: <LineChartIcon /> },
             { view: 'rewind', label: 'Market Rewind', icon: <RewindIcon /> },
+            { view: 'macro', label: 'Macro Analysis', icon: <GlobeIcon /> },
         ],
     },
     {
@@ -110,7 +111,7 @@ export const SideNav: React.FC<SideNavProps> = ({ isOpen, onClose, activeView, s
             <Logo className="h-10 w-auto" />
             <div>
               <h1 className="text-xl font-bold text-white">
-                Jax<span className="font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-blue-500">Spot</span>
+                Jax<span className="font-bold text-lime-400">Spot</span>
               </h1>
               <p className="text-xs text-gray-400">AI Market Agent</p>
             </div>
@@ -125,7 +126,7 @@ export const SideNav: React.FC<SideNavProps> = ({ isOpen, onClose, activeView, s
           <div className="flex items-stretch gap-2">
             <button
               onClick={() => setActiveView('chat')}
-              className={`flex-1 p-3 rounded-lg transition-all duration-300 flex items-center justify-center text-xl font-bold shadow-lg hover:shadow-purple-500/40 ${
+              className={`flex-1 p-3 rounded-lg transition-all duration-300 flex items-center justify-center text-lg font-bold shadow-lg hover:shadow-purple-500/40 ${
                 activeView === 'chat'
                   ? 'bg-gradient-to-r from-purple-600 to-blue-500 text-white'
                   : 'bg-gray-800 hover:bg-gray-700 text-white'
@@ -134,8 +135,18 @@ export const SideNav: React.FC<SideNavProps> = ({ isOpen, onClose, activeView, s
               <span className="tracking-widest">JAX</span>
             </button>
             <button
+              onClick={() => setActiveView('dashboard')}
+              className={`flex-1 p-3 rounded-lg transition-all duration-300 flex items-center justify-center text-lg font-bold shadow-lg hover:shadow-purple-500/40 ${
+                activeView === 'dashboard'
+                  ? 'bg-gradient-to-r from-purple-600 to-blue-500 text-white'
+                  : 'bg-gray-800 hover:bg-gray-700 text-white'
+              }`}
+            >
+              DASH
+            </button>
+            <button
                 onClick={() => setActiveView('pipeline')}
-                className={`flex-1 p-3 rounded-lg transition-all duration-300 flex items-center justify-center text-xl font-bold shadow-lg hover:shadow-purple-500/40 ${
+                className={`flex-1 p-3 rounded-lg transition-all duration-300 flex items-center justify-center text-lg font-bold shadow-lg hover:shadow-purple-500/40 ${
                     activeView === 'pipeline'
                         ? 'bg-gradient-to-r from-purple-600 to-blue-500 text-white'
                         : 'bg-gray-800 hover:bg-gray-700 text-white'

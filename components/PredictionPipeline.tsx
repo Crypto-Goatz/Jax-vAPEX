@@ -1,8 +1,12 @@
+
 import React, { useState, useMemo } from 'react';
 import { CryptoPrice } from '../services/cryptoService';
 import { LoadingSpinner } from './LoadingSpinner';
-import { XCircleIcon, ChevronRightIcon, VaultIcon, CloseIcon, ChevronsRightIcon, ChevronsLeftIcon } from './Icons';
+import { XCircleIcon, ChevronRightIcon, VaultIcon, CloseIcon, ChevronsRightIcon, ChevronsLeftIcon, LineChartIcon } from './Icons';
 import type { PipelineCryptoPrice } from '../App';
+import { tradeSimulatorService, Trade } from '../services/tradeSimulatorService';
+import { CryptoChartModal } from './CryptoChartModal';
+
 
 export interface PipelineStageDefinition {
   id: string;
@@ -119,7 +123,8 @@ const HoldingModal: React.FC<{
 const CryptoPipelineCard: React.FC<{ 
   coin: PipelineCryptoPrice;
   stage: PipelineStageDefinition;
-}> = ({ coin, stage }) => {
+  onCoinClick: (coin: PipelineCryptoPrice) => void;
+}> = ({ coin, stage, onCoinClick }) => {
   const [logoError, setLogoError] = useState(false);
   const logoUrl = `https://assets.coincap.io/assets/icons/${coin.symbol.toLowerCase()}@2x.png`;
 
@@ -143,7 +148,7 @@ const CryptoPipelineCard: React.FC<{
   };
 
   return (
-    <div style={cardStyle} className="p-3 rounded-lg border border-gray-700 mb-3 transition-all hover:shadow-lg hover:-translate-y-1 w-full text-left animate-fade-in-up">
+    <button onClick={() => onCoinClick(coin)} style={cardStyle} className="p-3 rounded-lg border border-gray-700 mb-3 transition-all hover:shadow-lg hover:-translate-y-1 w-full text-left animate-fade-in-up">
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
           {logoError ? (
@@ -171,11 +176,11 @@ const CryptoPipelineCard: React.FC<{
         <p className="text-xs text-purple-300">Condition:</p>
         <p className="text-xs text-gray-400 font-mono">{stage.getConditionText(coin)}</p>
       </div>
-    </div>
+    </button>
   );
 };
 
-const ActiveTradeCard: React.FC<{ coin: PipelineCryptoPrice }> = ({ coin }) => {
+const ActiveTradeCard: React.FC<{ coin: PipelineCryptoPrice, onViewChart: () => void }> = ({ coin, onViewChart }) => {
     const [logoError, setLogoError] = useState(false);
     const logoUrl = `https://assets.coincap.io/assets/icons/${coin.symbol.toLowerCase()}@2x.png`;
     const pnl = coin.pnl ?? 0;
@@ -202,15 +207,20 @@ const ActiveTradeCard: React.FC<{ coin: PipelineCryptoPrice }> = ({ coin }) => {
                     <p className="font-mono text-sm text-white">${coin.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                 </div>
             </div>
-            <div className="mt-2 pt-2 border-t border-gray-700/50 grid grid-cols-2 gap-2 text-center">
-                <div>
-                    <p className="text-xs text-gray-400">Entry Price</p>
-                    <p className="font-mono text-sm text-white">{formatCurrency(coin.entryPrice)}</p>
+            <div className="mt-2 pt-2 border-t border-gray-700/50 flex justify-between items-center">
+                <div className="grid grid-cols-2 gap-2 text-left flex-grow">
+                    <div>
+                        <p className="text-xs text-gray-400">Entry Price</p>
+                        <p className="font-mono text-sm text-white">{formatCurrency(coin.entryPrice)}</p>
+                    </div>
+                    <div>
+                        <p className="text-xs text-gray-400">Unrealized P/L</p>
+                        <p className={`font-mono text-sm font-bold ${pnlColor}`}>{formatCurrency(pnl)}</p>
+                    </div>
                 </div>
-                <div>
-                    <p className="text-xs text-gray-400">Unrealized P/L</p>
-                    <p className={`font-mono text-sm font-bold ${pnlColor}`}>{formatCurrency(pnl)}</p>
-                </div>
+                 <button onClick={onViewChart} className="p-2 text-gray-400 hover:text-purple-400 hover:bg-gray-700 rounded-full transition-colors ml-2 flex-shrink-0" aria-label={`View chart for ${coin.symbol}`}>
+                    <LineChartIcon className="w-5 h-5" />
+                </button>
             </div>
         </div>
     );
@@ -235,7 +245,9 @@ const CollapsiblePipelineStage: React.FC<{
     coins: PipelineCryptoPrice[];
     isCollapsed: boolean;
     onToggleCollapse: () => void;
-}> = ({ stageNumber, exitedCoinInfo, stage, coins, isCollapsed, onToggleCollapse }) => {
+    onCoinClick: (coin: PipelineCryptoPrice) => void;
+    onViewTradeChart: (tradeId: string) => void;
+}> = ({ stageNumber, exitedCoinInfo, stage, coins, isCollapsed, onToggleCollapse, onCoinClick, onViewTradeChart }) => {
   
   const stageColor = stage.id === 'stage5' ? 'text-green-400' : 'text-purple-400';
   const ringColor = stage.id === 'stage5' ? 'ring-green-500' : 'ring-purple-500';
@@ -294,9 +306,9 @@ const CollapsiblePipelineStage: React.FC<{
         {coins.length > 0 ? (
           coins.map(coin => {
             if (stage.id === 'stage5') {
-                return <ActiveTradeCard key={coin.id} coin={coin} />;
+                return <ActiveTradeCard key={coin.id} coin={coin} onViewChart={() => onViewTradeChart(coin.id)} />;
             }
-            return <CryptoPipelineCard key={coin.id} coin={coin} stage={stage} />;
+            return <CryptoPipelineCard key={coin.id} coin={coin} stage={stage} onCoinClick={onCoinClick} />;
           })
         ) : (
           <div className="flex items-center justify-center h-full text-gray-500 text-sm">
@@ -326,14 +338,23 @@ interface PredictionPipelineProps {
     allCoins: CryptoPrice[];
     isLoading: boolean;
     stages: PipelineStageDefinition[];
+    onShowCoinDetail: (coin: CryptoPrice) => void;
 }
 
-export const PredictionPipeline: React.FC<PredictionPipelineProps> = ({ pipeline, exitedCoins, isLoading, stages }) => {
+export const PredictionPipeline: React.FC<PredictionPipelineProps> = ({ pipeline, exitedCoins, isLoading, stages, onShowCoinDetail }) => {
   const [activeStageIndex, setActiveStageIndex] = useState(0);
   const [isHoldingModalOpen, setIsHoldingModalOpen] = useState(false);
   const [collapsedStages, setCollapsedStages] = useState<Set<string>>(
       new Set(['stage1', 'stage2', 'stage3'])
   );
+  const [tradeForChart, setTradeForChart] = useState<Trade | null>(null);
+
+  const handleViewTradeChart = (tradeId: string) => {
+    const trade = tradeSimulatorService.getAllTrades().find(t => t.id === tradeId);
+    if (trade) {
+        setTradeForChart(trade);
+    }
+  };
 
   const toggleStageCollapse = (stageId: string) => {
     setCollapsedStages(prev => {
@@ -409,6 +430,8 @@ export const PredictionPipeline: React.FC<PredictionPipelineProps> = ({ pipeline
                         exitedCoinInfo={exitedCoins[stage.id] || null}
                         isCollapsed={collapsedStages.has(stage.id)}
                         onToggleCollapse={() => toggleStageCollapse(stage.id)}
+                        onCoinClick={onShowCoinDetail}
+                        onViewTradeChart={handleViewTradeChart}
                     />
                     {index < stages.length - 1 && (
                          <div className="flex items-center justify-center flex-shrink-0">
@@ -430,6 +453,8 @@ export const PredictionPipeline: React.FC<PredictionPipelineProps> = ({ pipeline
                     exitedCoinInfo={exitedCoins[stages[activeStageIndex].id] || null}
                     isCollapsed={false}
                     onToggleCollapse={() => {}}
+                    onCoinClick={onShowCoinDetail}
+                    onViewTradeChart={handleViewTradeChart}
                 />
             )}
         </div>
@@ -453,6 +478,7 @@ export const PredictionPipeline: React.FC<PredictionPipelineProps> = ({ pipeline
       `}</style>
     </div>
     <HoldingModal isOpen={isHoldingModalOpen} onClose={() => setIsHoldingModalOpen(false)} coins={holdingCoins} />
+    {tradeForChart && <CryptoChartModal trade={tradeForChart} onClose={() => setTradeForChart(null)} />}
     </>
   );
 };

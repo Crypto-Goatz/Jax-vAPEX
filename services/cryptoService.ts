@@ -1,4 +1,4 @@
-import { build } from "esbuild";
+import { btcHistoryService } from './btcHistoryService';
 
 export interface CryptoPrice {
   id: string;
@@ -34,7 +34,7 @@ export interface GlobalLiquidity {
 export interface PrimaryDataResponse {
   news_sentiment: NewsSentiment;
   global_liquidity: GlobalLiquidity;
-  live_pricing: any[]; // Raw pricing data from the script
+  live_pricing: any[]; // Raw pricing data
 }
 
 
@@ -59,21 +59,44 @@ export interface OhlcvData {
 }
 
 const FIREBASE_PROJECT_ID = "cryptogoatz-official";
-// This URL seems to be consistently failing. We will prioritize fallbacks.
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyJE0UtXQSjZ3wsSYHLm066ZUtbfcMShgHN04p7_cDZDtKNr0IlRYlo_p4jHmu_2GeTeQ/exec';
+const GOOGLE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSc5lzT8YRDvyb1vqo0NiDD6xvp5tbffuPToSSi_P-a-F8J_AA0nrkpWzXii_1b_hbKydqdmOnRST0p/pub?output=csv';
 
-// FIX: Removed the hardcoded CoinGecko demo API key to use the public, keyless API, which is more reliable and avoids rate-limiting issues from a shared key.
-const COINGECKO_BASE_URL = 'https://api.coingecko.com/api/v3';
-const COINGECKO_PRICING_FALLBACK_URL = `${COINGECKO_BASE_URL}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=50&page=1&sparkline=false`;
-const COINGECKO_GLOBAL_FALLBACK_URL = `${COINGECKO_BASE_URL}/global`;
+
+// Mock data for non-pricing related features to keep them functional as per the user's request.
+const MOCK_STATIC_DATA = {
+  global_liquidity: {
+    total_market_cap: 2570000000000,
+    btc_dominance: 51.8,
+    stablecoin_supply: 150000000000,
+    defi_tvl: 95000000000,
+  },
+  news_sentiment: {
+    sentiment_score: 0.68,
+    trending_narratives: [
+      "AI tokens gain traction as tech giants invest.",
+      "Regulatory clarity in the EU boosts institutional interest.",
+      "Layer-2 solutions see record high transaction volumes.",
+      "Bitcoin ETFs continue to see net positive inflows.",
+      "The 'Real World Asset' (RWA) narrative is heating up."
+    ],
+    top_story: {
+      headline: "Major Investment Bank Announces Plans for Crypto Custody Services",
+      source: "CryptoNews Today",
+      url: "#",
+    },
+  },
+};
 
 
 // --- SERVICE-LEVEL CACHING ---
 let primaryDataCache: PrimaryDataResponse | null = null;
 let lastFetchTimestamp = 0;
 const CACHE_DURATION = 10000; // Cache for 10 seconds to prevent rapid re-fetching from different components
-
 const cryptoDataStore: { [key: string]: CryptoPrice } = {};
+
+// --- FAIL-SAFE CACHE ---
+let lastPriceCache: Map<string, number> = new Map();
+
 
 /**
  * Constructs a public URL for a file in Firebase Storage.
@@ -86,100 +109,115 @@ const buildStorageUrl = (path: string): string => {
 };
 
 /**
- * Fetches the primary composite data from the Google Apps Script.
- * Uses a short-term cache to avoid redundant network calls.
+ * Parses raw CSV text into an array of objects.
+ * @param csvText The raw CSV string.
+ * @returns An array of objects representing the rows.
  */
-const fetchFromGoogleScript = async (): Promise<PrimaryDataResponse> => {
+const parseCsvData = (csvText: string): any[] => {
+    const rows = csvText.trim().split('\n');
+    const headers = rows.shift()?.split(',') || [];
+    return rows.map(row => {
+        const values = row.split(',');
+        const obj: any = {};
+        headers.forEach((header, index) => {
+            obj[header.trim()] = values[index]?.trim();
+        });
+        return obj;
+    });
+};
+
+/**
+ * Fail-safe function to check for inconsistent price data.
+ * @param newPrices The newly fetched list of crypto prices.
+ */
+const checkPriceConsistency = (newPrices: CryptoPrice[]) => {
+    if (lastPriceCache.size === 0) {
+        // First fetch, populate cache and skip check
+        newPrices.forEach(p => lastPriceCache.set(p.id, p.price));
+        return;
+    }
+
+    const top10 = newPrices.sort((a, b) => (b.marketCap || 0) - (a.marketCap || 0)).slice(0, 10);
+    let inconsistentCount = 0;
+    const inconsistencyThreshold = 0.50; // 50% change is considered inconsistent
+
+    top10.forEach(coin => {
+        const oldPrice = lastPriceCache.get(coin.id);
+        if (oldPrice && oldPrice > 0) {
+            const change = Math.abs((coin.price - oldPrice) / oldPrice);
+            if (change > inconsistencyThreshold) {
+                inconsistentCount++;
+            }
+        }
+    });
+
+    if (inconsistentCount > 5) { // If more than half of the top 10 are inconsistent
+        const errorMessage = `FAIL-SAFE TRIGGERED: Inconsistent pricing data detected from the source. More than 5 of the top 10 coins changed by over ${inconsistencyThreshold * 100}%. Please investigate the data source. Notification should be sent to mike@rocketopp.com.`;
+        console.error(errorMessage);
+        // In a real application, this would trigger a backend service to send an email.
+        // For this frontend-only implementation, we log a critical error to the console.
+    }
+
+    // Update cache with the new, validated prices
+    newPrices.forEach(p => lastPriceCache.set(p.id, p.price));
+};
+
+
+/**
+ * Fetches the primary composite data. Pricing is fetched from the Google Sheet,
+ * while other data comes from a static mock to preserve UI functionality.
+ * Uses a short-term cache to avoid redundant processing.
+ */
+const fetchPrimaryData = async (): Promise<PrimaryDataResponse> => {
     const now = Date.now();
     if (primaryDataCache && (now - lastFetchTimestamp < CACHE_DURATION)) {
-        console.log("Returning cached primary data.");
         return primaryDataCache;
     }
-    console.log("Fetching live data from primary source (Google Script)...");
-    
-    // FIX: Add specific try/catch for the fetch call to handle network errors gracefully.
+
     try {
-        const response = await fetch(GOOGLE_SCRIPT_URL);
+        const response = await fetch(GOOGLE_SHEET_URL, { cache: 'no-store' });
         if (!response.ok) {
-            throw new Error(`Google Script request failed with status ${response.status}`);
+            throw new Error(`Failed to fetch from Google Sheet: ${response.statusText}`);
         }
-        const data = await response.json();
-        if (!data.live_pricing || !data.news_sentiment || !data.global_liquidity) {
-            throw new Error("Google Script response is missing required data fields.");
-        }
-        primaryDataCache = data;
-        lastFetchTimestamp = now;
-        return data;
-    } catch (error) {
-        if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
-            // This is the specific network error the user is seeing.
-            throw new Error('Network error: Unable to connect to the primary data source.');
-        }
-        // Re-throw other errors
-        throw error;
-    }
-};
+        const csvText = await response.text();
+        const parsedData = parseCsvData(csvText);
 
-/**
- * Fetches live pricing data from the CoinGecko API as a fallback.
- */
-const fetchFromCoinGecko = async (): Promise<CryptoPrice[]> => {
-    console.log("Fetching live pricing from fallback source (CoinGecko)...");
-    try {
-        const response = await fetch(COINGECKO_PRICING_FALLBACK_URL);
-        if (!response.ok) throw new Error(`CoinGecko API request failed: ${response.statusText}`);
-        const data = await response.json();
-        if (!Array.isArray(data)) throw new Error('CoinGecko API did not return an array.');
-        
-        return data.map((coin: any) => ({
-            id: coin.id,
-            symbol: coin.symbol.toUpperCase(),
-            name: coin.name,
-            price: coin.current_price ?? 0,
-            change24h: coin.price_change_percentage_24h ?? 0,
-            marketCap: coin.market_cap ?? 0,
-        })).filter(p => p.price > 0);
+        const live_pricing = parsedData.map((d: any) => ({
+            id: d.id,
+            symbol: d.symbol.toUpperCase(),
+            name: d.name,
+            current_price: parseFloat(d.current_price),
+            market_cap: parseInt(d.market_cap, 10),
+            price_change_percentage_24h: parseFloat(d.price_change_percentage_24h),
+        })).filter(d => d.id && d.symbol && !isNaN(d.current_price) && d.current_price > 0);
 
-    } catch (error) {
-        if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
-             throw new Error('Network error: Unable to connect to the CoinGecko API.');
-        }
-        throw error;
-    }
-};
-
-/**
- * NEW: Fetches global liquidity data from CoinGecko as a fallback.
- */
-const fetchGlobalLiquidityFromFallback = async (): Promise<GlobalLiquidity> => {
-    console.log("Fetching global liquidity from fallback source (CoinGecko)...");
-    try {
-        const response = await fetch(COINGECKO_GLOBAL_FALLBACK_URL);
-        if (!response.ok) throw new Error(`CoinGecko Global API request failed: ${response.statusText}`);
-        const data = await response.json();
-        
-        return {
-            total_market_cap: data.data.total_market_cap.usd,
-            btc_dominance: data.data.market_cap_percentage.btc,
-            // These are not available from this endpoint, so we provide reasonable static values.
-            stablecoin_supply: 160_000_000_000,
-            defi_tvl: 95_000_000_000
+        const result: PrimaryDataResponse = {
+            live_pricing,
+            ...MOCK_STATIC_DATA
         };
+
+        primaryDataCache = result;
+        lastFetchTimestamp = now;
+
+        return result;
     } catch (error) {
-        console.error("CoinGecko Global fallback failed:", error);
-        // Re-throw the error to be handled by the caller.
-        throw error;
+        console.error("Error fetching or parsing pricing data from Google Sheet:", error);
+        if (primaryDataCache) {
+            console.warn("Returning stale cache due to fetch failure.");
+            return primaryDataCache;
+        }
+        throw error; // Re-throw if no cache is available
     }
 };
 
-
 /**
- * Main function to get live pricing. Tries the Google Script first, then CoinGecko, then cache.
+ * Main function to get live pricing. Relies on the Google Sheet source of truth.
  * Returns an empty array if all sources fail.
  */
 export const fetchLivePricing = async (): Promise<CryptoPrice[]> => {
   try {
-    const data = await fetchFromGoogleScript();
+    const data = await fetchPrimaryData();
+    
     const prices: CryptoPrice[] = data.live_pricing.map((coin: any) => ({
         id: coin.id,
         symbol: coin.symbol.toUpperCase(),
@@ -189,60 +227,50 @@ export const fetchLivePricing = async (): Promise<CryptoPrice[]> => {
         marketCap: coin.market_cap ?? 0,
     })).filter(p => p.price > 0 && p.symbol);
     
-    // Update cache with fresh data
+    // Run the fail-safe check against the last known prices
+    checkPriceConsistency(prices);
+    
+    // Update short-term cache (cryptoDataStore) used for immediate fallbacks
     Object.keys(cryptoDataStore).forEach(key => delete cryptoDataStore[key]);
     prices.forEach(p => { cryptoDataStore[p.id] = p; });
     return prices;
     
   } catch (primaryError) {
-    console.warn("Primary data fetch (Google Script) failed:", (primaryError as Error).message);
-    try {
-        const prices = await fetchFromCoinGecko();
-        Object.keys(cryptoDataStore).forEach(key => delete cryptoDataStore[key]);
-        prices.forEach(p => { cryptoDataStore[p.id] = p; });
-        return prices;
-    } catch (fallbackError) {
-        console.error("Fallback data fetch (CoinGecko) also failed:", (fallbackError as Error).message);
-        const cachedData = Object.values(cryptoDataStore);
-        if (cachedData.length > 0) {
-            console.log("Returning cached data as a last resort.");
-            return cachedData;
-        } else {
-            console.warn("All data sources failed and cache is empty. Returning empty array.");
-            return [];
-        }
+    console.warn("Primary data source failed:", (primaryError as Error).message);
+    const cachedData = Object.values(cryptoDataStore);
+    if (cachedData.length > 0) {
+        console.log("Returning cached pricing data as a fallback.");
+        return cachedData;
+    } else {
+        console.error("Primary data source failed and cache is empty. Unable to fetch live pricing.");
+        return [];
     }
   }
 };
 
 /**
- * Gets the news and sentiment data. Returns null if the primary source fails.
+ * Gets the news and sentiment data from the static mock.
  */
 export const getNewsSentiment = async (): Promise<NewsSentiment | null> => {
     try {
-        const data = await fetchFromGoogleScript();
+        const data = await fetchPrimaryData(); // Ensures cache is used if available
         return data.news_sentiment;
     } catch (error) {
-        console.warn("Primary source for news sentiment failed. No fallback available.", (error as Error).message);
+        console.warn("Could not retrieve news sentiment due to data source failure.", (error as Error).message);
         return null;
     }
 };
 
 /**
- * Gets the global liquidity data. Uses CoinGecko as a fallback and returns null if both sources fail.
+ * Gets the global liquidity data from the static mock.
  */
 export const getGlobalLiquidity = async (): Promise<GlobalLiquidity | null> => {
     try {
-        const data = await fetchFromGoogleScript();
+        const data = await fetchPrimaryData(); // Ensures cache is used if available
         return data.global_liquidity;
     } catch (error) {
-        console.warn("Primary source for global liquidity failed. Using fallback.", (error as Error).message);
-        try {
-            return await fetchGlobalLiquidityFromFallback();
-        } catch (fallbackError) {
-            console.error("Global liquidity fallback also failed. No data available.", (fallbackError as Error).message);
-            return null;
-        }
+        console.warn("Could not retrieve global liquidity due to data source failure.", (error as Error).message);
+        return null;
     }
 };
 
