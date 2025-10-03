@@ -3,6 +3,7 @@ import { SYSTEM_INSTRUCTION } from '../constants';
 import type { LearningPattern } from './learningService';
 import type { AvailableSignal } from './signalsService';
 import type { BtcHistoryEntry } from './btcHistoryService';
+import type { ChatContext } from '../types';
 
 
 // Fix: Initialize GoogleGenAI with named apiKey parameter
@@ -38,15 +39,15 @@ const getFriendlyErrorMessage = (error: any): string => {
 };
 
 /**
- * Sends a prompt to the Gemini model with the predefined system instruction.
+ * Sends a prompt to the Gemini model and expects a structured JSON response.
  * @param prompt The user's message.
  * @param image Optional image data for multimodal prompts.
- * @returns A string containing the model's text response.
+ * @returns An object containing the model's text response and any associated context.
  */
 export const runChat = async (
     prompt: string,
     image?: { data: string; mimeType: string }
-): Promise<string> => {
+): Promise<{ text: string; context: ChatContext | null }> => {
     try {
         let contents: any;
 
@@ -70,14 +71,54 @@ export const runChat = async (
             contents: contents,
             config: {
                 systemInstruction: SYSTEM_INSTRUCTION,
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        response: { type: Type.STRING },
+                        context: {
+                            type: Type.OBJECT,
+                            nullable: true,
+                            properties: {
+                                symbol: { type: Type.STRING },
+                                narrative: { type: Type.STRING },
+                                posts: {
+                                    type: Type.ARRAY,
+                                    items: {
+                                        type: Type.OBJECT,
+                                        properties: {
+                                            platform: { type: Type.STRING, enum: ['X'] },
+                                            user: { type: Type.STRING },
+                                            handle: { type: Type.STRING },
+                                            content: { type: Type.STRING },
+                                            url: { type: Type.STRING },
+                                            avatarUrl: { type: Type.STRING },
+                                        },
+                                        required: ["platform", "user", "handle", "content", "url", "avatarUrl"]
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    required: ["response", "context"]
+                }
             },
         });
         
-        return response.text;
+        const jsonString = response.text.trim();
+        const parsedResponse = JSON.parse(jsonString);
+
+        return {
+            text: parsedResponse.response || "Sorry, I couldn't generate a response.",
+            context: parsedResponse.context || null,
+        };
 
     } catch (error: any) {
         console.error("Gemini API call failed in runChat:", error);
-        return getFriendlyErrorMessage(error);
+        return {
+            text: getFriendlyErrorMessage(error),
+            context: null
+        };
     }
 };
 
@@ -173,18 +214,26 @@ export const getSmartSignalSearch = async (query: string, signals: AvailableSign
 };
 
 /**
- * Asks the Gemini model to refine a failed trading pattern.
- * @param pattern The failed learning pattern.
- * @param pnl The resulting P/L from the failed experiment.
+ * Asks the Gemini model to refine a tested trading pattern based on its P/L.
+ * @param pattern The learning pattern that was tested.
+ * @param pnl The resulting P/L from the experiment.
  * @returns A string containing the AI's suggestion for a refined pattern.
  */
 export const getRefinedPattern = async (pattern: LearningPattern, pnl: number): Promise<string> => {
     try {
-        const prompt = `
-        As an expert AI trading strategist, analyze the following trading pattern that failed when tested.
-        The experiment resulted in a P/L of ${pnl.toFixed(2)} USD.
+        const outcome = pnl >= 0
+            ? `a profitable outcome with a P/L of +$${pnl.toFixed(2)} USD.`
+            : `a loss with a P/L of -$${Math.abs(pnl).toFixed(2)} USD.`;
 
-        Failed Pattern Details:
+        const taskDescription = pnl >= 0
+            ? `Your task is to refine this successful pattern to make it even more robust or consistent.`
+            : `Your task is to analyze this failed pattern and propose a refined, more robust version.`;
+            
+        const prompt = `
+        As an expert AI trading strategist, analyze the following trading pattern which was recently tested.
+        The experiment resulted in ${outcome}
+
+        Pattern Details:
         - Title: "${pattern.title}"
         - Category: ${pattern.category}
         - Hypothesis: "${pattern.description}"
@@ -193,9 +242,9 @@ export const getRefinedPattern = async (pattern: LearningPattern, pnl: number): 
         - Direction: ${pattern.trade_direction}
         - AI Confidence: ${pattern.confidence}%
 
-        Your task is to propose a refined, more robust version of this pattern.
-        1.  Identify potential flaws. Was it too simple? Did it miss a key confirmation indicator (e.g., volume, volatility, another asset's movement)?
-        2.  Suggest 1-2 specific, additional conditions to add to the hypothesis to improve its accuracy. Examples: "AND BTC volume is above the 24h average" or "AND DXY is trending downwards".
+        ${taskDescription}
+        1.  Identify potential flaws (if it failed) or areas for improvement (if it succeeded). Was it too simple? Did it miss a key confirmation indicator (e.g., volume, volatility, another asset's movement)? Could the entry or exit be optimized?
+        2.  Suggest 1-2 specific, additional conditions to add to the hypothesis to improve its accuracy or profitability. Examples: "AND BTC volume is above the 24h average" or "AND DXY is trending downwards".
         3.  Provide a new, improved "description" for the refined pattern.
         4.  Keep the response concise and actionable.
         `;

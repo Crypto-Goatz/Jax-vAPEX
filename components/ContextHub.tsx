@@ -12,22 +12,22 @@ const SocialPostCard: React.FC<{ post: SocialPost }> = ({ post }) => (
         href={post.url} 
         target="_blank" 
         rel="noopener noreferrer" 
-        className="block bg-gray-800 p-3 rounded-lg border border-gray-700 hover:bg-gray-700/50 transition-colors"
+        className="block bg-white p-3 rounded-lg border border-gray-200 hover:bg-gray-50/50 transition-colors shadow-sm"
     >
         <div className="flex items-start space-x-3">
             {post.avatarUrl ? (
                  <img src={post.avatarUrl} alt={`${post.user} avatar`} className="w-10 h-10 rounded-full flex-shrink-0" />
             ) : (
-                <div className="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center flex-shrink-0">
-                    <XIcon className="w-5 h-5 text-gray-400"/>
+                <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
+                    <XIcon className="w-5 h-5 text-gray-500"/>
                 </div>
             )}
             <div className="flex-1">
                 <div className="flex items-center space-x-1">
-                    <span className="font-bold text-white text-sm">{post.user}</span>
-                    <span className="text-gray-400 text-sm">@{post.handle}</span>
+                    <span className="font-bold text-gray-900 text-sm">{post.user}</span>
+                    <span className="text-gray-500 text-sm">@{post.handle}</span>
                 </div>
-                <p className="text-gray-300 text-sm mt-1">{post.content}</p>
+                <p className="text-gray-700 text-sm mt-1">{post.content}</p>
             </div>
         </div>
     </a>
@@ -98,30 +98,44 @@ const ContextChart: React.FC<{ coinSymbol: string }> = ({ coinSymbol }) => {
         return <div className="h-24 flex items-center justify-center"><LoadingSpinner /></div>;
     }
     if (!chartData) {
-        return <div className="h-24 flex items-center justify-center text-xs text-red-400">Chart data unavailable.</div>;
+        return <div className="h-24 flex items-center justify-center text-xs text-red-500">Chart data unavailable.</div>;
     }
     return <div className="h-24 w-full"><canvas ref={chartCanvasRef}></canvas></div>;
 };
 
 const LivePriceTicker: React.FC<{ liveCoin: CryptoPrice }> = ({ liveCoin }) => {
+    const [logoError, setLogoError] = useState(false);
+    useEffect(() => { setLogoError(false); }, [liveCoin.symbol]);
+
     const isUp = liveCoin.change24h >= 0;
+    const logoUrl = `https://assets.coincap.io/assets/icons/${liveCoin.symbol.toLowerCase()}@2x.png`;
+    
     return (
-        <div className="bg-gray-800 p-3 rounded-lg border border-gray-700">
+        <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
             <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
-                    <div className="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center font-bold text-purple-400 text-sm">
-                        {liveCoin.symbol.charAt(0)}
-                    </div>
+                    {logoError ? (
+                        <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center font-bold text-purple-600 text-sm">
+                            {liveCoin.symbol.charAt(0)}
+                        </div>
+                    ) : (
+                        <img
+                            src={logoUrl}
+                            alt={`${liveCoin.name} logo`}
+                            className="w-8 h-8 rounded-full"
+                            onError={() => setLogoError(true)}
+                        />
+                    )}
                     <div>
-                        <p className="font-bold text-white">{liveCoin.name}</p>
-                        <p className="text-sm text-gray-400">{liveCoin.symbol}</p>
+                        <p className="font-bold text-gray-900">{liveCoin.name}</p>
+                        <p className="text-sm text-gray-500">{liveCoin.symbol}</p>
                     </div>
                 </div>
                  <div className="text-right">
-                    <p className="font-mono font-bold text-lg text-white">
+                    <p className="font-mono font-bold text-lg text-gray-900">
                         ${liveCoin.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
                     </p>
-                    <p className={`font-mono font-semibold text-sm ${isUp ? 'text-green-400' : 'text-red-400'}`}>
+                    <p className={`font-mono font-semibold text-sm ${isUp ? 'text-green-600' : 'text-red-600'}`}>
                         {isUp ? '+' : ''}{liveCoin.change24h.toFixed(2)}%
                     </p>
                 </div>
@@ -138,15 +152,15 @@ const ConversationStarter: React.FC<{ allCoins: CryptoPrice[] }> = ({ allCoins }
 
     return (
         <div className="flex flex-col items-center justify-center h-full text-center text-gray-500 p-4">
-            <JaxIcon className="w-12 h-12 mb-3 text-gray-600"/>
-            <p className="font-semibold">What are we exploring today?</p>
+            <JaxIcon className="w-12 h-12 mb-3 text-gray-400"/>
+            <p className="font-semibold text-gray-700">What are we exploring today?</p>
             <p className="text-sm">Ask me about a specific asset, or we can look at what's moving.</p>
             {topGainer && (
-                <div className="mt-6 w-full p-3 bg-gray-800/50 rounded-lg border border-gray-700 text-left">
-                    <p className="text-xs font-bold text-purple-300 flex items-center gap-1.5"><TrendingUpIcon className="w-4 h-4" /> CONVERSATION STARTER</p>
-                    <p className="text-sm text-gray-300 mt-1">
-                        The top gainer right now is <span className="font-bold text-white">{topGainer.name} ({topGainer.symbol})</span>,
-                        up <span className="font-bold text-green-400">{topGainer.change24h.toFixed(2)}%</span> in the last 24 hours.
+                <div className="mt-6 w-full p-3 bg-gray-100/50 rounded-lg border border-gray-200 text-left">
+                    <p className="text-xs font-bold text-purple-700 flex items-center gap-1.5"><TrendingUpIcon className="w-4 h-4" /> CONVERSATION STARTER</p>
+                    <p className="text-sm text-gray-700 mt-1">
+                        The top gainer right now is <span className="font-bold text-gray-900">{topGainer.name} ({topGainer.symbol})</span>,
+                        up <span className="font-bold text-green-600">{topGainer.change24h.toFixed(2)}%</span> in the last 24 hours.
                         Want to analyze its potential?
                     </p>
                 </div>
@@ -204,7 +218,7 @@ const ImageUploader: React.FC<{
 
     return (
         <div className="mb-4">
-            <h4 className="text-sm font-bold text-gray-300 mb-2">Chart Analysis</h4>
+            <h4 className="text-sm font-bold text-gray-700 mb-2">Chart Analysis</h4>
             {attachedImage ? (
                 <div className="relative group">
                     <img src={`data:${attachedImage.mimeType};base64,${attachedImage.data}`} alt="Uploaded chart" className="rounded-lg w-full h-auto object-contain max-h-48" />
@@ -215,12 +229,12 @@ const ImageUploader: React.FC<{
             ) : (
                 <div 
                     onDrop={handleDrop} onDragOver={handleDragOver} onDragEnter={handleDragEnter} onDragLeave={handleDragLeave}
-                    className={`relative flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${isDragging ? 'border-purple-500 bg-purple-500/10' : 'border-gray-600 hover:border-gray-500 bg-gray-800/50'}`}
+                    className={`relative flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${isDragging ? 'border-purple-500 bg-purple-500/10' : 'border-gray-300 hover:border-gray-400 bg-gray-100/50'}`}
                     onClick={() => fileInputRef.current?.click()}
                 >
                     <input type="file" ref={fileInputRef} onChange={handleFileSelect} accept="image/*" className="hidden" />
-                    <PaperclipIcon className="w-8 h-8 text-gray-500 mb-2" />
-                    <p className="text-sm text-center text-gray-400"><span className="font-semibold text-purple-400">Click to upload</span> or drag and drop</p>
+                    <PaperclipIcon className="w-8 h-8 text-gray-400 mb-2" />
+                    <p className="text-sm text-center text-gray-600"><span className="font-semibold text-purple-600">Click to upload</span> or drag and drop</p>
                     <p className="text-xs text-center text-gray-500">PNG, JPG, GIF up to 10MB</p>
                 </div>
             )}
@@ -247,10 +261,10 @@ export const ContextHub: React.FC<ContextHubProps> = ({ context, allCoins, onIma
     const liveCoinData = context?.symbol ? findCoinBySymbol(context.symbol) : null;
     
     return (
-        <div className="flex-1 flex flex-col h-full overflow-hidden">
-            <div className="p-4 border-b border-gray-700/50">
-                <h3 className="text-lg font-bold text-purple-400">Context Hub</h3>
-                <p className="text-sm text-gray-400">Supporting data for your conversation.</p>
+        <div className="flex-1 flex flex-col h-full overflow-hidden bg-gray-50">
+            <div className="p-4 border-b border-gray-200/50">
+                <h3 className="text-lg font-bold text-purple-700">Context Hub</h3>
+                <p className="text-sm text-gray-500">Supporting data for your conversation.</p>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 <ImageUploader onImageUpload={onImageUpload} attachedImage={attachedImage} />
@@ -264,13 +278,13 @@ export const ContextHub: React.FC<ContextHubProps> = ({ context, allCoins, onIma
                                 <ContextChart coinSymbol={liveCoinData.symbol} />
                             </>
                         ) : (
-                            context?.symbol && <div className="text-center text-sm text-yellow-400 p-2 bg-yellow-500/10 rounded-md">Live price data not found for {context.symbol}.</div>
+                            context?.symbol && <div className="text-center text-sm text-yellow-600 p-2 bg-yellow-100/50 rounded-md">Live price data not found for {context.symbol}.</div>
                         )}
                         
                         {context?.narrative && (
                             <div>
-                                <h4 className="text-sm font-bold text-gray-300 mb-2">AI Narrative</h4>
-                                <p className="text-sm text-gray-400 p-3 bg-gray-800 rounded-lg border border-gray-700 italic">
+                                <h4 className="text-sm font-bold text-gray-700 mb-2">AI Narrative</h4>
+                                <p className="text-sm text-gray-600 p-3 bg-gray-100 rounded-lg border border-gray-200 italic">
                                     "{context.narrative}"
                                 </p>
                             </div>
@@ -278,7 +292,7 @@ export const ContextHub: React.FC<ContextHubProps> = ({ context, allCoins, onIma
 
                         {context?.posts && context.posts.length > 0 && (
                             <div>
-                                <h4 className="text-sm font-bold text-gray-300 mb-2">Social Feed</h4>
+                                <h4 className="text-sm font-bold text-gray-700 mb-2">Social Feed</h4>
                                 <div className="space-y-3">
                                     {context.posts.map((post, index) => <SocialPostCard key={index} post={post} />)}
                                 </div>

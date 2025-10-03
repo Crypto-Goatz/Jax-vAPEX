@@ -45,8 +45,8 @@ const MacroChart: React.FC<MacroChartProps> = ({ chartData, btcLabel, macroLabel
                             {
                                 label: macroLabel,
                                 data: chartData.macroData,
-                                borderColor: 'rgba(52, 211, 153, 1)', // emerald-400
-                                backgroundColor: 'rgba(52, 211, 153, 0.1)',
+                                borderColor: 'rgba(16, 185, 129, 1)', // emerald-500
+                                backgroundColor: 'rgba(16, 185, 129, 0.1)',
                                 borderWidth: 2,
                                 yAxisID: 'yMacro',
                                 tension: 0.1,
@@ -55,8 +55,8 @@ const MacroChart: React.FC<MacroChartProps> = ({ chartData, btcLabel, macroLabel
                             {
                                 label: btcLabel,
                                 data: chartData.btcPrices,
-                                borderColor: 'rgba(168, 85, 247, 1)', // purple-500
-                                backgroundColor: 'rgba(168, 85, 247, 0.1)',
+                                borderColor: 'rgba(139, 92, 246, 1)', // violet-500
+                                backgroundColor: 'rgba(139, 92, 246, 0.1)',
                                 borderWidth: 2,
                                 yAxisID: 'yBtc',
                                 tension: 0.1,
@@ -70,15 +70,15 @@ const MacroChart: React.FC<MacroChartProps> = ({ chartData, btcLabel, macroLabel
                         interaction: { mode: 'index', intersect: false },
                         scales: {
                             x: {
-                                grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                                ticks: { color: '#9ca3af', maxRotation: 0, autoSkip: true, maxTicksLimit: 8 }
+                                grid: { color: 'rgba(0, 0, 0, 0.05)' },
+                                ticks: { color: '#6b7280', maxRotation: 0, autoSkip: true, maxTicksLimit: 8 }
                             },
                             yMacro: {
                                 type: 'linear',
                                 position: 'left',
-                                grid: { color: 'rgba(52, 211, 153, 0.1)' },
+                                grid: { color: 'rgba(16, 185, 129, 0.1)' },
                                 ticks: {
-                                    color: '#6ee7b7', // emerald-300
+                                    color: '#059669', // emerald-600
                                     callback: (value: any) => macroUnit === 'percent' ? formatPercent(value) : formatM2(value)
                                 }
                             },
@@ -87,17 +87,19 @@ const MacroChart: React.FC<MacroChartProps> = ({ chartData, btcLabel, macroLabel
                                 position: 'right',
                                 grid: { drawOnChartArea: false },
                                 ticks: {
-                                    color: '#c4b5fd', // violet-300
+                                    color: '#7c3aed', // violet-600
                                     callback: (value: any) => formatBtcPrice(value)
                                 }
                             }
                         },
                         plugins: {
-                            legend: { labels: { color: '#d1d5db' } },
+                            legend: { labels: { color: '#4b5563' } },
                             tooltip: {
-                                backgroundColor: '#1f2937',
-                                titleColor: '#f9fafb',
-                                bodyColor: '#d1d5db',
+                                backgroundColor: '#ffffff',
+                                titleColor: '#1f2937',
+                                bodyColor: '#4b5563',
+                                borderColor: '#e5e7eb',
+                                borderWidth: 1,
                             }
                         }
                     }
@@ -126,7 +128,6 @@ const useCombinedChartData = (
 
         const btcPriceMap = new Map<string, number>();
         btcHistory.forEach(entry => {
-            // Only store one price per day to match macro data frequency
             if (!btcPriceMap.has(entry.date)) {
                 btcPriceMap.set(entry.date, entry.price);
             }
@@ -138,8 +139,6 @@ const useCombinedChartData = (
 
         macroHistory.forEach(macroPoint => {
             const yearMonth = macroPoint.date.substring(0, 7);
-            
-            // Find a BTC price from that month. Simple approach: find first available day.
             const btcDate = Array.from(btcPriceMap.keys()).find(d => d.startsWith(yearMonth));
             
             if (btcDate) {
@@ -176,37 +175,37 @@ export const MacroView: React.FC<MacroViewProps> = ({ btcHistory, macroHistory }
             return (
                 <div className="flex-1 flex flex-col items-center justify-center">
                     <LoadingSpinner />
-                    <p className="mt-4 text-purple-300">Correlating historical data...</p>
+                    <p className="mt-4 text-purple-600">Correlating historical data...</p>
                 </div>
             );
         }
 
         return (
-             <div className="flex-1 p-4 overflow-y-auto space-y-8">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center bg-gray-800 p-6 rounded-lg border border-gray-700">
+             <div className="flex-1 p-4 overflow-y-auto space-y-8 bg-gray-50">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center bg-white p-6 rounded-lg border border-gray-200 shadow-md">
                     <div>
-                        <h3 className="text-2xl font-bold text-white">M2 Money Supply vs. BTC</h3>
-                        <p className="text-gray-400 mt-2">
+                        <h3 className="text-2xl font-bold text-gray-900">M2 Money Supply vs. BTC</h3>
+                        <p className="text-gray-600 mt-2">
                             M2 represents the total amount of currency in circulation. Historically, an increase in M2 (monetary expansion) has often preceded bullish periods for scarce assets like Bitcoin, as more currency chases fewer goods.
                         </p>
                     </div>
                     {m2ChartData && <MacroChart chartData={m2ChartData} btcLabel="BTC Price" macroLabel="M2 Supply" macroUnit="currency" />}
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center bg-gray-800 p-6 rounded-lg border border-gray-700">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center bg-white p-6 rounded-lg border border-gray-200 shadow-md">
                      <div>
-                        <h3 className="text-2xl font-bold text-white">US Inflation (CPI) vs. BTC</h3>
-                        <p className="text-gray-400 mt-2">
+                        <h3 className="text-2xl font-bold text-gray-900">US Inflation (CPI) vs. BTC</h3>
+                        <p className="text-gray-600 mt-2">
                            Inflation erodes the purchasing power of fiat currency. Bitcoin's fixed supply of 21 million coins positions it as a potential hedge against inflation, making it attractive to investors when the value of their cash is declining.
                         </p>
                     </div>
                     {inflationChartData && <MacroChart chartData={inflationChartData} btcLabel="BTC Price" macroLabel="Inflation Rate" macroUnit="percent" />}
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center bg-gray-800 p-6 rounded-lg border border-gray-700">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center bg-white p-6 rounded-lg border border-gray-200 shadow-md">
                      <div>
-                        <h3 className="text-2xl font-bold text-white">Fed Funds Rate vs. BTC</h3>
-                        <p className="text-gray-400 mt-2">
+                        <h3 className="text-2xl font-bold text-gray-900">Fed Funds Rate vs. BTC</h3>
+                        <p className="text-gray-600 mt-2">
                             The Federal Funds Rate influences the cost of borrowing. Lower rates can encourage investment in riskier assets like crypto. Conversely, higher rates can make traditional savings more attractive, potentially drawing capital away from crypto markets.
                         </p>
                     </div>
@@ -217,12 +216,12 @@ export const MacroView: React.FC<MacroViewProps> = ({ btcHistory, macroHistory }
     }
     
     return (
-        <div className="w-full h-full flex flex-col bg-gray-800/50 rounded-lg shadow-2xl border border-gray-700 overflow-hidden">
-            <div className="p-4 border-b border-gray-700">
-                <h2 className="text-xl font-semibold text-white flex items-center gap-2">
+        <div className="w-full h-full flex flex-col bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden">
+            <div className="p-4 border-b border-gray-200">
+                <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
                     <GlobeIcon /> Macro Analysis
                 </h2>
-                <p className="text-sm text-gray-400">Correlating global financial metrics with Bitcoin's performance.</p>
+                <p className="text-sm text-gray-500">Correlating global financial metrics with Bitcoin's performance.</p>
             </div>
             {renderContent()}
         </div>

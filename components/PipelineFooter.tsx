@@ -21,7 +21,7 @@ const FOOTER_STAGES = [
 ];
 
 const CoinRow: React.FC<{ coin: CryptoPrice }> = ({ coin }) => (
-    <li className="flex justify-between items-center text-xs font-mono px-1 py-0.5 rounded hover:bg-purple-500/10">
+    <li className="flex justify-between items-center text-xs font-mono px-1 py-0.5 rounded hover:bg-purple-100/50">
         <div className="flex items-center space-x-1.5 truncate">
              <img 
               src={`https://assets.coincap.io/assets/icons/${coin.symbol.toLowerCase()}@2x.png`} 
@@ -37,12 +37,12 @@ const CoinRow: React.FC<{ coin: CryptoPrice }> = ({ coin }) => (
 
 const QuickViewColumn: React.FC<{ title: string; coins: CryptoPrice[] }> = ({ title, coins }) => (
     <div className="flex-1 flex flex-col min-w-0">
-        <h4 className="font-bold text-purple-400 text-sm text-center border-b border-gray-700 pb-2 mb-2 truncate">{title}</h4>
-        <ul className="text-gray-300 space-y-1 overflow-y-auto pr-2 -mr-2 custom-scrollbar">
+        <h4 className="font-bold text-purple-700 text-sm text-center border-b border-gray-200 pb-2 mb-2 truncate">{title}</h4>
+        <ul className="text-gray-700 space-y-1 overflow-y-auto pr-2 -mr-2 custom-scrollbar">
             {coins.length > 0 ? (
                 coins.slice(0, 5).map(coin => <CoinRow key={coin.id} coin={coin} />)
             ) : (
-                <li className="text-center text-gray-600 italic text-xs py-2">Empty</li>
+                <li className="text-center text-gray-400 italic text-xs py-2">Empty</li>
             )}
         </ul>
     </div>
@@ -53,11 +53,11 @@ export const PipelineFooter: React.FC<PipelineFooterProps> = ({ pipeline, isNavO
     
     return (
         <>
-            <footer className={`fixed bottom-0 left-0 bg-gray-900/90 backdrop-blur-lg border-t border-gray-700/50 z-20 transition-all duration-300 ease-in-out ${isNavOpen ? 'right-0 md:right-64' : 'right-0'} ${isExpanded ? 'h-[33vh]' : 'h-8'}`}>
+            <footer className={`fixed bottom-0 left-0 bg-white/90 backdrop-blur-lg border-t border-gray-200/50 z-20 transition-all duration-300 ease-in-out ${isNavOpen ? 'right-0 md:right-64' : 'right-0'} ${isExpanded ? 'h-[33vh]' : 'h-8'}`}>
                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 flex items-center space-x-1">
                     <button
                         onClick={onToggle}
-                        className="bg-gray-700 hover:bg-gray-600 border border-gray-600 text-gray-300 hover:text-white rounded-full p-1 z-30 transition-all"
+                        className="bg-white hover:bg-gray-100 border border-gray-300 text-gray-600 hover:text-gray-900 rounded-full p-1 z-30 transition-all shadow-md"
                         aria-label={isExpanded ? "Collapse footer" : "Expand footer"}
                         aria-expanded={isExpanded}
                     >
@@ -83,7 +83,7 @@ export const PipelineFooter: React.FC<PipelineFooterProps> = ({ pipeline, isNavO
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                             <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
                         </div>
-                        <span className="text-xs text-gray-400">Pipeline Active</span>
+                        <span className="text-xs text-gray-500">Pipeline Active</span>
                     </div>
                 </div>
             </footer>
@@ -92,8 +92,8 @@ export const PipelineFooter: React.FC<PipelineFooterProps> = ({ pipeline, isNavO
                  /* Custom scrollbar for pop-up */
                 .custom-scrollbar::-webkit-scrollbar { width: 6px; }
                 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-                .custom-scrollbar::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 10px; }
-                .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+                .custom-scrollbar::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 10px; }
+                .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
             `}</style>
         </>
     );

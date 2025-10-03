@@ -1,76 +1,121 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { signalsService, AvailableSignal, SignalEvent } from '../services/signalsService';
-import { getSmartSignalSearch } from '../services/geminiService';
+import { BellIcon, CheckCircleIcon, SearchIcon } from './Icons';
 import { CryptoPrice } from '../services/cryptoService';
+import { getSmartSignalSearch } from '../services/geminiService';
 import { LoadingSpinner } from './LoadingSpinner';
-import { SearchIcon, BellIcon, TrendingUpIcon, TrendingDownIcon, ClockIcon } from './Icons';
 
-// --- HELPER ---
-const formatCurrency = (value: number | null | undefined) => {
-    if (value === null || value === undefined) return 'N/A';
-    const fractionDigits = (Math.abs(value) > 0 && Math.abs(value) < 1) ? 6 : 2;
-    return value.toLocaleString('en-US', {
-        style: 'currency',
-        currency: 'USD',
-        minimumFractionDigits: 2,
-        maximumFractionDigits: fractionDigits
-    });
-};
+// Helper
+const formatCurrency = (value: number | undefined | null) => {
+    if (value === null || value === undefined) return "—";
+    return value.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: Math.abs(value) > 0 && Math.abs(value) < 1 ? 6 : 2 });
+}
 
-// --- SUB-COMPONENTS ---
-
-const SignalEventCard: React.FC<{
-    event: SignalEvent;
-    livePrice: number | undefined;
-}> = ({ event, livePrice }) => {
-    const { signal, triggeredAt, triggeredPrice } = event;
-    const isBuySignal = signal.trade_direction === 'buy';
-    
-    let performance = 0;
-    let performanceColor = 'text-gray-400';
-    if (livePrice !== undefined) {
-        performance = ((livePrice - triggeredPrice) / triggeredPrice) * 100;
-        if (!isBuySignal) performance *= -1; // Invert for shorts
-        if (performance > 0.01) performanceColor = 'text-green-400';
-        if (performance < -0.01) performanceColor = 'text-red-400';
-    }
+// Signal Card
+const ActivatedSignalCard: React.FC<{ signal: AvailableSignal; allCoins: CryptoPrice[] }> = ({ signal, allCoins }) => {
+    const triggerCoin = allCoins.find(c => c.symbol.toUpperCase() === signal.trigger_asset.toUpperCase());
+    const affectedCoin = allCoins.find(c => c.symbol.toUpperCase() === signal.affected_asset.toUpperCase());
 
     return (
-        <div className="bg-gray-800 p-4 rounded-lg border border-gray-700 space-y-3 animate-fade-in-down">
-            <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center font-bold text-purple-400 text-lg flex-shrink-0">
-                    {signal.affected_asset.charAt(0)}
-                </div>
-                <div>
-                    <p className="font-bold text-white">{signal.affected_asset}</p>
-                    <p className="text-xs text-gray-400">{signal.title}</p>
-                </div>
+        <div className="bg-white p-4 rounded-lg border border-gray-200 animate-fade-in-up shadow-md">
+            <div className="flex justify-between items-start">
+                <h4 className="font-bold text-gray-900 text-lg">{signal.title}</h4>
+                <span className="flex items-center gap-2 px-3 py-1.5 text-sm font-semibold text-green-800 bg-green-100 rounded-full">
+                    <CheckCircleIcon className="w-4 h-4" /> Active
+                </span>
             </div>
-            
-            <p className="text-sm text-gray-300 italic">"{signal.description.split('. Shall I')[0]}"</p>
+            <p className="text-sm text-gray-700 mt-2 italic">"{signal.description}"</p>
 
-            <div className="pt-3 border-t border-gray-700/50 grid grid-cols-2 gap-3 text-sm">
-                <div>
-                    <p className="text-xs text-gray-400">Triggered At</p>
-                    <p className="font-mono text-white">{formatCurrency(triggeredPrice)}</p>
-                </div>
-                 <div className="text-right">
-                    <p className="text-xs text-gray-400">Performance</p>
-                    <p className={`font-mono font-bold text-lg ${performanceColor}`}>
-                        {performance >= 0 ? '+' : ''}{performance.toFixed(2)}%
-                    </p>
-                </div>
-            </div>
-            <div className="text-xs text-gray-500 flex items-center justify-end space-x-1">
-                <ClockIcon className="w-3 h-3"/>
-                <span>{new Date(triggeredAt).toLocaleString()}</span>
+            <div className="mt-4 p-3 bg-gray-50 rounded-lg text-sm border border-gray-200 space-y-1">
+                <p>
+                    <span className="font-bold text-purple-700">IF:</span>{" "}
+                    <span className="font-semibold text-gray-800">{signal.trigger_asset}</span> shows pattern{" "}
+                    {triggerCoin && (
+                        <span className="ml-2 text-blue-600 font-mono">(Live {formatCurrency(triggerCoin.price)})</span>
+                    )}
+                </p>
+                <p>
+                    <span className="font-bold text-purple-700">THEN:</span>{" "}
+                    <span className="font-semibold text-gray-800 uppercase">{signal.trade_direction}</span>{" "}
+                    <span className="font-semibold text-gray-800">{signal.affected_asset}</span>{" "}
+                    {affectedCoin && (
+                        <span className="ml-2 text-blue-600 font-mono">(Live {formatCurrency(affectedCoin.price)})</span>
+                    )}
+                </p>
             </div>
         </div>
     );
 };
 
+// Event Row
+const SignalEventRow: React.FC<{ event: SignalEvent; allCoins: CryptoPrice[] }> = ({ event, allCoins }) => {
+    const [isExpanded, setIsExpanded] = useState(false);
+    const livePrice = event.livePrice; // Use the price from the service
 
-// --- MAIN COMPONENT ---
+    const pnlSinceTrigger = useMemo(() => {
+        if (typeof livePrice !== 'number') return null;
+        const priceChange = livePrice - event.triggeredPrice;
+        return event.signal.trade_direction.toUpperCase() === 'BUY' ? priceChange : -priceChange;
+    }, [livePrice, event.triggeredPrice, event.signal.trade_direction]);
+
+    const pnlPercentage = useMemo(() => {
+        if (pnlSinceTrigger === null || event.triggeredPrice === 0) return null;
+        return (pnlSinceTrigger / event.triggeredPrice) * 100;
+    }, [pnlSinceTrigger, event.triggeredPrice]);
+
+    return (
+        <React.Fragment>
+            <tr className="border-b border-gray-200 animate-fade-in-down hover:bg-gray-50">
+                {/* Signal & Action */}
+                <td className="p-3 align-top">
+                    <p className="font-semibold text-gray-800">{event.signal.title}</p>
+                    <p className="text-xs text-gray-500">{event.signal.affected_asset} → {event.signal.trade_direction.toUpperCase()}</p>
+                </td>
+                
+                {/* Prices */}
+                <td className="p-3 font-mono text-gray-700 align-top">
+                    <div><span className="text-xs text-gray-500">Trigger:</span> {formatCurrency(event.triggeredPrice)}</div>
+                    {typeof livePrice === 'number' && (
+                        <div><span className="text-xs text-blue-600">Current:</span> {formatCurrency(livePrice)}</div>
+                    )}
+                </td>
+
+                {/* Triggered At / P&L */}
+                <td className="p-3 text-sm text-gray-500 align-top">
+                    <div>{new Date(event.triggeredAt).toLocaleString()}</div>
+                    {pnlSinceTrigger !== null && pnlPercentage !== null ? (
+                        <div className={`font-semibold font-mono text-xs ${pnlSinceTrigger >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                           P/L: {pnlSinceTrigger >= 0 ? '+' : ''}{formatCurrency(pnlSinceTrigger)} ({pnlPercentage.toFixed(2)}%)
+                        </div>
+                    ) : (
+                        <div className="text-xs text-gray-400">P/L: —</div>
+                    )}
+                </td>
+
+                {/* Details Button */}
+                <td className="p-3 text-center align-top">
+                    <button 
+                        onClick={() => setIsExpanded(!isExpanded)} 
+                        className="px-3 py-1 text-xs font-semibold text-purple-700 bg-purple-100 hover:bg-purple-200 rounded-full transition-colors"
+                    >
+                        {isExpanded ? 'Hide' : 'Details'}
+                    </button>
+                </td>
+            </tr>
+            {isExpanded && (
+                <tr className="animate-fade-in bg-gray-50">
+                    <td colSpan={4} className="p-4 border-b border-gray-200">
+                        <h5 className="font-bold text-sm text-purple-700">Trigger Condition Met:</h5>
+                        <p className="text-sm text-gray-700 italic mt-1">"{event.signal.description}"</p>
+                    </td>
+                </tr>
+            )}
+        </React.Fragment>
+    );
+};
+
+
+// Main Component
 interface JaxSignalsProps {
     allCoins: CryptoPrice[];
 }
@@ -80,128 +125,124 @@ export const JaxSignals: React.FC<JaxSignalsProps> = ({ allCoins }) => {
     const [signalEvents, setSignalEvents] = useState<SignalEvent[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [isSearching, setIsSearching] = useState(false);
-    const [filteredSignalIds, setFilteredSignalIds] = useState<string[] | null>(null);
-    const [selectedSignalId, setSelectedSignalId] = useState<string | null>(null);
+    const [filteredSignalIds, setFilteredSignalIds] = useState<Set<string> | null>(null);
 
     useEffect(() => {
-        const updateState = () => {
+        const handleUpdate = () => {
             setActivatedSignals(signalsService.getActivatedSignals());
             setSignalEvents(signalsService.getSignalEvents());
         };
-        signalsService.subscribe(updateState);
-        updateState(); // Initial load
-        return () => signalsService.unsubscribe(updateState);
+
+        signalsService.subscribe(handleUpdate);
+        handleUpdate();
+
+        return () => signalsService.unsubscribe(handleUpdate);
     }, []);
 
-    useEffect(() => {
-        if (searchQuery.trim() === '') {
+    const handleSearch = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!searchQuery.trim()) {
             setFilteredSignalIds(null);
             return;
         }
-
-        const handler = setTimeout(async () => {
-            setIsSearching(true);
-            try {
-                const results = await getSmartSignalSearch(searchQuery, activatedSignals);
-                setFilteredSignalIds(results);
-            } catch (error) {
-                console.error("Smart search failed:", error);
-                setFilteredSignalIds([]); // Show no results on error
-            } finally {
-                setIsSearching(false);
-            }
-        }, 500); // 500ms debounce
-
-        return () => clearTimeout(handler);
-    }, [searchQuery, activatedSignals]);
-
-    const displayedSignals = useMemo(() => {
-        if (filteredSignalIds === null) {
-            return activatedSignals;
+        setIsSearching(true);
+        try {
+            const allSignals = signalsService.getActivatedSignals();
+            const matchingIds = await getSmartSignalSearch(searchQuery, allSignals);
+            setFilteredSignalIds(new Set(matchingIds));
+        } catch (error) {
+            console.error("Smart search failed:", error);
+        } finally {
+            setIsSearching(false);
         }
-        return activatedSignals.filter(signal => filteredSignalIds.includes(signal.id));
-    }, [activatedSignals, filteredSignalIds]);
-    
-    const displayedEvents = useMemo(() => {
-        if (selectedSignalId === null) {
-            return signalEvents;
-        }
-        return signalEvents.filter(event => event.signal.id === selectedSignalId);
-    }, [signalEvents, selectedSignalId]);
+    };
 
-    const livePriceMap = useMemo(() => new Map(allCoins.map(c => [c.symbol.toUpperCase(), c.price])), [allCoins]);
+    const handleClearSearch = () => {
+        setSearchQuery('');
+        setFilteredSignalIds(null);
+    };
+
+    const displayedSignals = filteredSignalIds === null
+        ? activatedSignals
+        : activatedSignals.filter(s => filteredSignalIds.has(s.id));
 
     return (
-        <div className="w-full h-full flex flex-col bg-gray-800/50 rounded-lg shadow-2xl border border-gray-700 overflow-hidden">
-            <div className="p-4 border-b border-gray-700">
-                <h2 className="text-xl font-semibold text-white">Jax Signals</h2>
-                <p className="text-sm text-gray-400">Live feed of your activated AI-driven market signals.</p>
+        <div className="w-full h-full flex flex-col bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden">
+            <div className="p-4 border-b border-gray-200">
+                <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2"><BellIcon /> Jax Signals</h2>
+                <p className="text-sm text-gray-500">Monitor activated signals with live prices and event logs.</p>
             </div>
-            
-            <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
-                {/* Left Column: Signal Library */}
-                <div className="w-full md:w-1/3 lg:w-1/4 p-4 border-b md:border-b-0 md:border-r border-gray-700 flex flex-col">
-                    <h3 className="text-lg font-bold text-purple-400 mb-2">Signal Library</h3>
-                    <div className="relative mb-4">
-                        <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                        {isSearching && <div className="absolute right-3 top-1/2 -translate-y-1/2"><LoadingSpinner /></div>}
+
+            <div className="flex-1 p-4 grid grid-cols-1 xl:grid-cols-2 gap-6 overflow-hidden bg-gray-50">
+                {/* Activated Signals */}
+                <div className="flex flex-col gap-4 overflow-hidden">
+                    <h3 className="text-lg font-bold text-purple-700">Activated Signals ({displayedSignals.length})</h3>
+                    <form onSubmit={handleSearch} className="flex gap-2">
                         <input
                             type="text"
-                            placeholder="AI Smart Search (e.g., 'ETH spikes')"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full bg-gray-900 border border-gray-700 rounded-lg p-2 pl-10 text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                            placeholder="Smart search signals... (e.g., 'bullish BTC signals')"
+                            className="w-full flex-grow bg-white border border-gray-300 rounded-lg p-2 text-gray-900 focus:outline-none focus:ring-1 focus:ring-purple-500"
                         />
-                    </div>
-                    <div className="flex-1 overflow-y-auto pr-2 -mr-2 space-y-2">
-                        {displayedSignals.map(signal => (
-                            <button
-                                key={signal.id}
-                                onClick={() => setSelectedSignalId(prev => prev === signal.id ? null : signal.id)}
-                                className={`w-full text-left p-3 rounded-lg transition-colors border-l-4 ${selectedSignalId === signal.id ? 'bg-purple-600/20 border-purple-500' : 'bg-gray-800 border-gray-700 hover:bg-gray-700/50'}`}
-                            >
-                                <p className="font-semibold text-white">{signal.title}</p>
-                                <p className="text-xs text-gray-400">{signal.affected_asset} based on {signal.trigger_asset}</p>
-                            </button>
-                        ))}
-                         {filteredSignalIds !== null && displayedSignals.length === 0 && (
-                            <div className="text-center p-4 text-sm text-gray-500">No signals match your search.</div>
-                         )}
+                        <button type="submit" disabled={isSearching} className="px-4 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg transition-colors disabled:bg-gray-400">
+                            {isSearching ? <LoadingSpinner /> : <SearchIcon />}
+                        </button>
+                    </form>
+                    <div className="flex-1 overflow-y-auto pr-2 -mr-2 space-y-4">
+                        {activatedSignals.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center h-full text-center text-gray-500">
+                                <BellIcon className="w-12 h-12 mb-3 text-gray-400"/>
+                                <p className="font-semibold">No signals have been activated yet.</p>
+                                <p className="text-sm">Promote a successful experiment from the 'Experiments' tab to activate a signal.</p>
+                            </div>
+                        ) : displayedSignals.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center h-full text-center text-gray-500">
+                                <p className="font-semibold">No signals found for "{searchQuery}".</p>
+                                <button onClick={handleClearSearch} className="mt-2 text-sm text-purple-600 hover:underline">Clear search</button>
+                            </div>
+                        ) : (
+                            displayedSignals.map(signal => (
+                                <ActivatedSignalCard key={signal.id} signal={signal} allCoins={allCoins} />
+                            ))
+                        )}
                     </div>
                 </div>
 
-                {/* Right Column: Active Signal Feed */}
-                <div className="flex-1 p-4 overflow-y-auto">
-                    <h3 className="text-lg font-bold text-purple-400 mb-4">
-                        {selectedSignalId ? 'Filtered Signal Events' : 'Live Signal Feed'}
-                    </h3>
-                    {displayedEvents.length > 0 ? (
-                        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-                            {displayedEvents.map(event => (
-                                <SignalEventCard 
-                                    key={event.eventId} 
-                                    event={event} 
-                                    livePrice={livePriceMap.get(event.signal.affected_asset.toUpperCase())}
-                                />
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="flex flex-col items-center justify-center h-full text-center text-gray-500">
-                             <BellIcon className="w-12 h-12 mb-3 text-gray-600"/>
-                             <p className="font-semibold">Awaiting Signal Events</p>
-                             <p className="text-sm">When an activated signal's conditions are met, it will appear here.</p>
-                        </div>
-                    )}
+                {/* Signal Event Log */}
+                <div className="flex flex-col overflow-hidden">
+                    <h3 className="text-lg font-bold text-purple-700 mb-4">Signal Event Log</h3>
+                    <div className="flex-1 overflow-y-auto bg-white rounded-lg border border-gray-200 shadow-sm">
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-gray-50 text-xs text-gray-500 uppercase sticky top-0">
+                                <tr>
+                                    <th className="p-3">Signal & Action</th>
+                                    <th className="p-3">Prices</th>
+                                    <th className="p-3">Triggered At / P&L</th>
+                                    <th className="p-3 text-center">Details</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {signalEvents.length > 0 ? (
+                                    signalEvents.map(event => (
+                                        <SignalEventRow key={event.eventId} event={event} allCoins={allCoins} />
+                                    ))
+                                ) : (
+                                    <tr><td colSpan={4} className="text-center p-8 text-gray-500">Awaiting signal events...</td></tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
-             <style>{`
-                @keyframes fade-in-down {
-                from { opacity: 0; transform: translateY(-10px); }
-                to { opacity: 1; transform: translateY(0); }
-                }
-                .animate-fade-in-down {
-                animation: fade-in-down 0.5s ease-out forwards;
-                }
+
+            <style>{`
+                @keyframes fade-in-up { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+                .animate-fade-in-up { animation: fade-in-up 0.5s ease-out forwards; }
+                @keyframes fade-in-down { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+                .animate-fade-in-down { animation: fade-in-down 0.4s ease-out forwards; }
+                @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+                .animate-fade-in { animation: fade-in 0.3s ease-out forwards; }
             `}</style>
         </div>
     );

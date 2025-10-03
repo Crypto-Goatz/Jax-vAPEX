@@ -20,12 +20,12 @@ export const JaxCoreMenu: React.FC<JaxCoreMenuProps> = ({ activeDrawer, onToggle
     }, []);
 
     const menuButtonClass = "flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-colors";
-    const activeMenuButtonClass = "bg-purple-600 text-white";
-    const inactiveMenuButtonClass = "bg-gray-800 hover:bg-gray-700 text-gray-300";
+    const activeMenuButtonClass = "bg-purple-600 text-white shadow-inner";
+    const inactiveMenuButtonClass = "bg-gray-100 hover:bg-gray-200 text-gray-700";
 
     return (
         <div className="relative flex-shrink-0 z-40">
-            <div className="p-2 bg-gray-900/50 border-b border-gray-700/50 flex items-center justify-between">
+            <div className="p-2 bg-white border-b border-gray-200/50 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                     <button onClick={() => onToggleDrawer('wallet')} className={`${menuButtonClass} ${activeDrawer === 'wallet' ? activeMenuButtonClass : inactiveMenuButtonClass}`}>
                         <WalletIcon className="w-5 h-5"/> Global Wallet
@@ -37,8 +37,8 @@ export const JaxCoreMenu: React.FC<JaxCoreMenuProps> = ({ activeDrawer, onToggle
                         <SettingsIcon className="w-5 h-5"/> Strategy
                     </button>
                 </div>
-                <div className="text-sm text-white">
-                    JaxAI Prediction Score: <span className="font-bold text-green-400">{accuracy}% Accuracy</span>
+                <div className="text-sm text-gray-800">
+                    JaxAI Prediction Score: <span className="font-bold text-green-600">{accuracy}% Accuracy</span>
                 </div>
             </div>
         </div>

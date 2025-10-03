@@ -188,13 +188,13 @@ export const CryptoChartModal: React.FC<CryptoChartModalProps> = ({ trade, onClo
             maintainAspectRatio: false,
             scales: {
               x: {
-                grid: { color: 'rgba(255, 255, 255, 0.1)' },
-                ticks: { color: '#9ca3af' } // gray-400
+                grid: { color: 'rgba(0, 0, 0, 0.05)' },
+                ticks: { color: '#6b7280' } // gray-500
               },
               y: {
-                grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                grid: { color: 'rgba(0, 0, 0, 0.05)' },
                 ticks: { 
-                    color: '#9ca3af', // gray-400
+                    color: '#6b7280', // gray-500
                     callback: (value: string | number) => `$${Number(value).toLocaleString()}`
                 }
               }
@@ -204,10 +204,12 @@ export const CryptoChartModal: React.FC<CryptoChartModalProps> = ({ trade, onClo
               tooltip: {
                 mode: 'index',
                 intersect: false,
-                backgroundColor: '#1f2937', // gray-800
-                titleColor: '#f9fafb', // gray-50
-                bodyColor: '#d1d5db', // gray-300
-                footerColor: '#9ca3af', // gray-400
+                backgroundColor: '#ffffff', // white
+                titleColor: '#1f2937', // gray-800
+                bodyColor: '#4b5563', // gray-600
+                footerColor: '#6b7280', // gray-500
+                borderColor: '#e5e7eb', // gray-200
+                borderWidth: 1,
                 displayColors: false,
                 padding: 10,
                 callbacks: {
@@ -239,34 +241,34 @@ export const CryptoChartModal: React.FC<CryptoChartModalProps> = ({ trade, onClo
   
   return (
     <div 
-      className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 backdrop-blur-sm" 
+      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm" 
       role="dialog" 
       aria-modal="true"
       aria-labelledby="chart-title"
       onClick={onClose}
     >
       <div 
-        className="w-full max-w-4xl h-[70vh] bg-gray-900 border border-gray-700 rounded-lg shadow-2xl flex flex-col animate-fade-in"
+        className="w-full max-w-4xl h-[70vh] bg-white border border-gray-200 rounded-lg shadow-2xl flex flex-col animate-fade-in"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="p-4 flex justify-between items-center border-b border-gray-700 flex-shrink-0">
+        <div className="p-4 flex justify-between items-center border-b border-gray-200 flex-shrink-0">
           <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center font-bold text-purple-400 text-sm">
+            <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center font-bold text-purple-600 text-sm">
                 {coin.symbol.charAt(0)}
             </div>
-            <h2 id="chart-title" className="text-xl font-semibold text-white">{coin.name} ({coin.symbol}) Trade Analysis</h2>
+            <h2 id="chart-title" className="text-xl font-semibold text-gray-900">{coin.name} ({coin.symbol}) Trade Analysis</h2>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-white" aria-label="Close chart modal">
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-800" aria-label="Close chart modal">
             <CloseIcon />
           </button>
         </div>
-        <div className="p-4 flex items-center justify-center space-x-2 border-b border-gray-700 flex-shrink-0">
+        <div className="p-4 flex items-center justify-center space-x-2 border-b border-gray-200 flex-shrink-0">
           {timeframes.map(tf => (
             <button 
               key={tf}
               onClick={() => setTimeframe(tf)}
               className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                timeframe === tf ? 'bg-purple-600 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                timeframe === tf ? 'bg-purple-600 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
               }`}
             >
               {tf.toUpperCase()}
@@ -278,14 +280,14 @@ export const CryptoChartModal: React.FC<CryptoChartModalProps> = ({ trade, onClo
              <div className="absolute inset-0 flex items-center justify-center">
                 <div className="flex flex-col items-center space-y-2">
                     <LoadingSpinner />
-                    <p className="text-gray-400">Loading chart data...</p>
+                    <p className="text-gray-500">Loading chart data...</p>
                 </div>
             </div>
           ) : chartData ? (
             <canvas ref={chartCanvasRef}></canvas>
           ) : (
             <div className="absolute inset-0 flex items-center justify-center">
-                <p className="text-red-400">Could not load chart data.</p>
+                <p className="text-red-500">Could not load chart data.</p>
             </div>
           )}
         </div>

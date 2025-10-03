@@ -10,7 +10,7 @@ export const Logo: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
     </defs>
     
     {/* Main container */}
-    <rect width="100" height="100" rx="20" fill="#1f2937" /> {/* gray-800 */}
+    <rect width="100" height="100" rx="20" fill="#f3f4f6" /> {/* gray-100 */}
     
     {/* Chart path */}
     <path 

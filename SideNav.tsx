@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import {
     CloseIcon, ChartBarIcon, DatabaseIcon, PipelineIcon, LineChartIcon, WalletIcon, RewindIcon,
@@ -17,6 +18,7 @@ type SideNavProps = {
 };
 
 const formatCompact = (value: number) => {
+    if (!value || !isFinite(value)) return '$0';
     return new Intl.NumberFormat('en-US', {
         notation: 'compact',
         compactDisplay: 'short',
@@ -30,7 +32,7 @@ const GlobalMarketStats: React.FC<{ liquidity: GlobalLiquidity }> = ({ liquidity
         <div className="space-y-3">
             <div className="flex items-center justify-between text-sm">
                 <span className="flex items-center gap-2 text-gray-600"><GlobeIcon className="w-4 h-4 text-gray-500"/> Market Cap</span>
-                <span className="font-mono font-semibold text-gray-800">${formatCompact(liquidity.total_market_cap)}</span>
+                <span className="font-mono font-semibold text-gray-800">{formatCompact(liquidity.total_market_cap)}</span>
             </div>
              <div className="flex items-center justify-between text-sm">
                 <span className="flex items-center gap-2 text-gray-600"><BitcoinIcon className="w-4 h-4 text-gray-500"/> BTC Dominance</span>
@@ -38,11 +40,11 @@ const GlobalMarketStats: React.FC<{ liquidity: GlobalLiquidity }> = ({ liquidity
             </div>
              <div className="flex items-center justify-between text-sm">
                 <span className="flex items-center gap-2 text-gray-600"><DollarIcon className="w-4 h-4 text-gray-500"/> Stablecoin Supply</span>
-                <span className="font-mono font-semibold text-gray-800">${formatCompact(liquidity.stablecoin_supply)}</span>
+                <span className="font-mono font-semibold text-gray-800">{formatCompact(liquidity.stablecoin_supply)}</span>
             </div>
              <div className="flex items-center justify-between text-sm">
                 <span className="flex items-center gap-2 text-gray-600"><LockIcon className="w-4 h-4 text-gray-500"/> DeFi TVL</span>
-                <span className="font-mono font-semibold text-gray-800">${formatCompact(liquidity.defi_tvl)}</span>
+                <span className="font-mono font-semibold text-gray-800">{formatCompact(liquidity.defi_tvl)}</span>
             </div>
         </div>
     </div>
@@ -64,7 +66,6 @@ const navItems = [
         items: [
             { view: 'learning', label: 'Active Learning', icon: <LightbulbIcon /> },
             { view: 'experiments', label: 'Experiments', icon: <BeakerIcon /> },
-            { view: 'rewind', label: 'Market Rewind', icon: <RewindIcon /> },
             { view: 'signalLab', label: 'Signal Lab', icon: <FlowChartIcon /> },
             { view: 'signals', label: 'Jax Signals', icon: <BellIcon /> },
             { view: 'wallet', label: 'Simulated Wallet', icon: <WalletIcon /> },
@@ -73,8 +74,9 @@ const navItems = [
     {
         category: 'System',
         items: [
+            { view: 'coreSettings', label: 'Core Settings', icon: <SettingsIcon /> },
             { view: 'data', label: 'Data Sources', icon: <DatabaseIcon /> },
-            { view: 'specs', label: 'Spec Details', icon: <SettingsIcon /> },
+            { view: 'specs', label: 'System Specs', icon: <RewindIcon /> },
         ],
     },
 ] as const;

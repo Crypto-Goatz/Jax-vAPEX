@@ -6,11 +6,11 @@ import { CheckCircleIcon, RefreshIcon, LightbulbIcon, RecycleIcon } from './Icon
 import { CryptoPrice } from '../services/cryptoService';
 
 const PATTERN_CATEGORIES: { [key: string]: { icon: string, color: string } } = {
-  'Price Correlation': { icon: '🔗', color: 'text-blue-400' },
-  'Sentiment Indicator': { icon: '😊', color: 'text-green-400' },
-  'On-Chain Anomaly': { icon: '⛓️', color: 'text-yellow-400' },
-  'Derivatives Signal': { icon: '📈', color: 'text-pink-400' },
-  'Inter-Asset Lag': { icon: '⏳', color: 'text-indigo-400' },
+  'Price Correlation': { icon: '🔗', color: 'text-blue-600' },
+  'Sentiment Indicator': { icon: '😊', color: 'text-green-600' },
+  'On-Chain Anomaly': { icon: '⛓️', color: 'text-yellow-600' },
+  'Derivatives Signal': { icon: '📈', color: 'text-pink-600' },
+  'Inter-Asset Lag': { icon: '⏳', color: 'text-indigo-600' },
 };
 
 // --- SUB-COMPONENTS ---
@@ -20,50 +20,50 @@ const PatternCard: React.FC<{
   onRecycle: () => void;
   isProcessing: boolean;
 }> = ({ pattern, onApprove, onRecycle, isProcessing }) => {
-  const categoryInfo = PATTERN_CATEGORIES[pattern.category] || { icon: '💡', color: 'text-purple-400' };
+  const categoryInfo = PATTERN_CATEGORIES[pattern.category] || { icon: '💡', color: 'text-purple-600' };
   const confidence = pattern.confidence;
   const confidenceColor = confidence > 75 ? 'bg-green-500' : confidence > 50 ? 'bg-yellow-500' : 'bg-red-500';
 
   return (
-    <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden flex flex-col animate-fade-in-up">
+    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden flex flex-col animate-fade-in-up shadow-md hover:shadow-lg transition-shadow">
       <div className="p-4 flex-grow">
         <div className="flex justify-between items-start gap-2">
-            <h3 className="text-lg font-bold text-white">{pattern.title}</h3>
+            <h3 className="text-lg font-bold text-gray-900">{pattern.title}</h3>
             <div className={`flex items-center space-x-2 text-sm font-semibold ${categoryInfo.color}`}>
                 <span>{categoryInfo.icon}</span>
                 <span>{pattern.category}</span>
             </div>
         </div>
         
-        <p className="text-sm text-gray-300 mt-2 italic">"{pattern.description}"</p>
+        <p className="text-sm text-gray-700 mt-2 italic">"{pattern.description}"</p>
 
-        <div className="mt-4 p-3 bg-gray-900/50 rounded-lg text-sm border border-gray-700/50">
-             <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider mb-2">Conditions</p>
-             <p><span className="font-bold text-purple-300">IF:</span> <span className="font-semibold text-white">{pattern.trigger_asset}</span> shows pattern</p>
-             <p><span className="font-bold text-purple-300">THEN:</span> <span className="font-semibold text-white uppercase">{pattern.trade_direction}</span> <span className="font-semibold text-white">{pattern.affected_asset}</span></p>
+        <div className="mt-4 p-3 bg-gray-50 rounded-lg text-sm border border-gray-200">
+             <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider mb-2">Conditions</p>
+             <p><span className="font-bold text-purple-700">IF:</span> <span className="font-semibold text-gray-800">{pattern.trigger_asset}</span> shows pattern</p>
+             <p><span className="font-bold text-purple-700">THEN:</span> <span className="font-semibold text-gray-800 uppercase">{pattern.trade_direction}</span> <span className="font-semibold text-gray-800">{pattern.affected_asset}</span></p>
         </div>
         
         <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
-            <div className="bg-gray-900/50 p-2 rounded-md">
-                <p className="text-xs text-gray-400">Times Observed</p>
-                <p className="font-mono text-lg font-bold text-white">{pattern.observation_count}</p>
+            <div className="bg-gray-50 p-2 rounded-md border border-gray-200">
+                <p className="text-xs text-gray-500">Times Observed</p>
+                <p className="font-mono text-lg font-bold text-gray-900">{pattern.observation_count}</p>
             </div>
-            <div className="bg-gray-900/50 p-2 rounded-md">
-                <p className="text-xs text-gray-400 mb-1">AI Confidence</p>
+            <div className="bg-gray-50 p-2 rounded-md border border-gray-200">
+                <p className="text-xs text-gray-500 mb-1">AI Confidence</p>
                 <div className="flex items-center gap-2">
-                    <div className="w-full bg-gray-700 rounded-full h-2.5 flex-grow">
+                    <div className="w-full bg-gray-200 rounded-full h-2.5 flex-grow">
                         <div className={`${confidenceColor} h-2.5 rounded-full`} style={{ width: `${confidence}%` }}></div>
                     </div>
-                    <p className="font-mono font-bold text-white text-lg">{confidence.toFixed(0)}%</p>
+                    <p className="font-mono font-bold text-gray-900 text-lg">{confidence.toFixed(0)}%</p>
                 </div>
             </div>
         </div>
       </div>
-      <div className="bg-gray-900/50 p-3 flex justify-end items-center space-x-3 border-t border-gray-700">
+      <div className="bg-gray-50 p-3 flex justify-end items-center space-x-3 border-t border-gray-200">
         <button
           onClick={onRecycle}
           disabled={isProcessing}
-          className="p-3 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 rounded-full transition-colors disabled:opacity-50"
+          className="p-3 bg-yellow-100 hover:bg-yellow-200 text-yellow-800 rounded-full transition-colors disabled:opacity-50"
           aria-label="Recycle and refine pattern"
           title="Recycle & Refine"
         >
@@ -72,7 +72,7 @@ const PatternCard: React.FC<{
         <button
           onClick={onApprove}
           disabled={isProcessing}
-          className="p-3 bg-green-500/10 hover:bg-green-500/20 text-green-400 rounded-full transition-colors disabled:opacity-50"
+          className="p-3 bg-green-100 hover:bg-green-200 text-green-800 rounded-full transition-colors disabled:opacity-50"
           aria-label="Approve pattern for experiment"
         >
           <CheckCircleIcon className="w-6 h-6" />
@@ -99,7 +99,6 @@ export const ActiveLearning: React.FC<ActiveLearningProps> = ({ allCoins }) => {
     setError(null);
     try {
       const response = await getLearningPatterns();
-      // Filter out patterns that are already experiments
       const newPatterns = response.patterns.filter(
         (p: LearningPattern) => !learningService.isPatternInExperiments(p.id)
       );
@@ -119,7 +118,6 @@ export const ActiveLearning: React.FC<ActiveLearningProps> = ({ allCoins }) => {
   const handleApprove = (pattern: LearningPattern) => {
     setProcessingId(pattern.id);
     learningService.approvePattern(pattern, allCoins);
-    // Remove the pattern from the view immediately for a snappy UI
     setPatterns(prev => prev.filter(p => p.id !== pattern.id));
     setProcessingId(null);
   };
@@ -127,7 +125,6 @@ export const ActiveLearning: React.FC<ActiveLearningProps> = ({ allCoins }) => {
   const handleRecycle = (pattern: LearningPattern) => {
     setProcessingId(pattern.id);
     learningService.recyclePattern(pattern);
-    // Remove from view
     setPatterns(prev => prev.filter(p => p.id !== pattern.id));
     setProcessingId(null);
   };
@@ -138,16 +135,16 @@ export const ActiveLearning: React.FC<ActiveLearningProps> = ({ allCoins }) => {
       return (
         <div className="flex flex-col items-center justify-center h-full">
           <LoadingSpinner />
-          <p className="mt-3 font-semibold text-purple-300">AI is searching for new patterns...</p>
+          <p className="mt-3 font-semibold text-purple-600">AI is searching for new patterns...</p>
         </div>
       );
     }
     if (error) {
       return (
         <div className="flex items-center justify-center h-full">
-            <div className="text-center p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
-                <p className="font-semibold text-red-400">Failed to Load Patterns</p>
-                <p className="text-sm text-gray-300 mt-1">{error}</p>
+            <div className="text-center p-4 bg-red-100 border border-red-200 rounded-lg">
+                <p className="font-semibold text-red-700">Failed to Load Patterns</p>
+                <p className="text-sm text-gray-600 mt-1">{error}</p>
             </div>
         </div>
       );
@@ -155,7 +152,7 @@ export const ActiveLearning: React.FC<ActiveLearningProps> = ({ allCoins }) => {
     if (patterns.length === 0) {
       return (
          <div className="flex flex-col items-center justify-center h-full text-center text-gray-500">
-            <LightbulbIcon className="w-12 h-12 mb-3 text-gray-600"/>
+            <LightbulbIcon className="w-12 h-12 mb-3 text-gray-400"/>
             <p className="font-semibold">No new learning patterns at this time.</p>
             <p className="text-sm">The AI is continuously analyzing the market. Check back soon!</p>
         </div>
@@ -178,22 +175,22 @@ export const ActiveLearning: React.FC<ActiveLearningProps> = ({ allCoins }) => {
   };
 
   return (
-    <div className="w-full h-full flex flex-col bg-gray-800/50 rounded-lg shadow-2xl border border-gray-700 overflow-hidden">
-        <div className="p-4 border-b border-gray-700 flex justify-between items-center">
+    <div className="w-full h-full flex flex-col bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden">
+        <div className="p-4 border-b border-gray-200 flex justify-between items-center">
             <div>
-                <h2 className="text-xl font-semibold text-white">Active Learning</h2>
-                <p className="text-sm text-gray-400">AI-discovered patterns awaiting your review.</p>
+                <h2 className="text-xl font-semibold text-gray-900">Active Learning</h2>
+                <p className="text-sm text-gray-500">AI-discovered patterns awaiting your review.</p>
             </div>
             <button
                 onClick={fetchPatterns}
                 disabled={isLoading}
-                className="p-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors disabled:opacity-50"
+                className="p-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg transition-colors disabled:opacity-50"
                 aria-label="Find new patterns"
             >
                 {isLoading ? <LoadingSpinner /> : <RefreshIcon />}
             </button>
         </div>
-        <div className="flex-1 p-4 overflow-y-auto">
+        <div className="flex-1 p-4 overflow-y-auto bg-gray-50">
             {renderContent()}
         </div>
          <style>{`

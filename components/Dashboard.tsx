@@ -1,205 +1,304 @@
+import React, { useEffect, useMemo, useState } from "react";
+import { googleSheetService } from "../services/googleSheetService";
+import { LoadingSpinner } from "./LoadingSpinner";
+import { MergedMasterTable } from "./MergedMasterTable";
+import { TrendingUpIcon, TrendingDownIcon } from './Icons';
 
-import React, { useState, useMemo } from 'react';
-import type { CryptoPrice, NewsSentiment } from '../services/cryptoService';
-import type { MacroData } from '../services/macroService';
-import { watchlistService } from '../services/watchlistService';
-import { tradeSimulatorService } from '../services/tradeSimulatorService';
-import { ExternalLinkIcon, CloseIcon } from './Icons';
-import { LoadingSpinner } from './LoadingSpinner';
-
-// --- HELPER ---
-const formatCompact = (value: number) => new Intl.NumberFormat('en-US', { notation: 'compact', compactDisplay: 'short', maximumFractionDigits: 2 }).format(value);
-const formatPercent = (value: number) => `${value.toFixed(1)}%`;
-const formatCurrency = (value: number) => value.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-
-// --- CARD SUB-COMPONENTS ---
-
-const MarketOverviewCard: React.FC<{ allCoins: CryptoPrice[] }> = ({ allCoins }) => {
-    const btc = allCoins.find(c => c.symbol === 'BTC');
-    const eth = allCoins.find(c => c.symbol === 'ETH');
-    const movers = useMemo(() => {
-        if (allCoins.length < 5) return [];
-        const sorted = [...allCoins].sort((a, b) => Math.abs(b.change24h) - Math.abs(a.change24h));
-        return sorted.slice(0, 5);
-    }, [allCoins]);
-    const pipelineScore = tradeSimulatorService.getSettings().aiConfidence;
-
-    return (
-        <div className="bg-gray-800/50 p-6 rounded-lg border border-gray-700 shadow-lg h-full flex flex-col">
-            <h3 className="text-xl font-bold text-white mb-4">Market Overview</h3>
-            <div className="grid grid-cols-2 gap-4 mb-4">
-                {btc && <CoinStat coin={btc} />}
-                {eth && <CoinStat coin={eth} />}
-            </div>
-            <div>
-                <h4 className="text-sm font-semibold text-gray-400 mb-2">Top Movers (24h)</h4>
-                <ul className="space-y-2">
-                    {movers.map(coin => <MoverRow key={coin.id} coin={coin} />)}
-                </ul>
-            </div>
-            <div className="mt-auto pt-4">
-                <p className="text-sm text-gray-400">AI Pipeline Confidence</p>
-                <p className="text-3xl font-bold text-blue-400">{pipelineScore.toFixed(1)}%</p>
-            </div>
-        </div>
-    );
+// Types (flexible: we normalize headers)
+type PipelineRow = {
+  symbol: string;
+  decision?: string;     // BUY/SELL/HOLD
+  confidence?: number;   // 0..100 or 0..1
+  score?: number;
+  timestamp?: string;
+  [k: string]: any;
 };
 
-const CoinStat: React.FC<{ coin: CryptoPrice }> = ({ coin }) => {
-    const isUp = coin.change24h >= 0;
-    return (
-        <div>
-            <p className="text-lg font-semibold text-gray-200">{coin.symbol}</p>
-            <p className="font-mono text-xl font-bold text-white">{formatCurrency(coin.price)}</p>
-            <p className={`font-mono font-semibold text-sm ${isUp ? 'text-green-400' : 'text-red-400'}`}>{isUp ? '+' : ''}{coin.change24h.toFixed(2)}%</p>
-        </div>
-    );
+type CompareRow = {
+  symbol: string;
+  classicDecision?: string;
+  classicConfidence?: number;
+  confluenceDecision?: string;
+  confluenceConfidence?: number;
+  [k: string]: any;
 };
-
-const MoverRow: React.FC<{ coin: CryptoPrice }> = ({ coin }) => {
-    const isUp = coin.change24h >= 0;
-    return (
-        <li className="flex justify-between items-center text-sm">
-            <span className="font-semibold text-gray-300">{coin.symbol}</span>
-            <span className={`font-mono font-semibold ${isUp ? 'text-green-400' : 'text-red-400'}`}>{isUp ? '+' : ''}{coin.change24h.toFixed(2)}%</span>
-        </li>
-    );
-};
-
-const MacroSnapshotCard: React.FC<{ macroData: MacroData | null }> = ({ macroData }) => (
-    <div className="bg-gray-800/50 p-6 rounded-lg border border-gray-700 shadow-lg h-full">
-        <h3 className="text-xl font-bold text-white mb-4">Macro Snapshot</h3>
-        {macroData ? (
-            <div className="space-y-4">
-                <MacroStat title="M2 Money Supply" value={`$${macroData.m2Supply}T`} color="text-green-400" />
-                <MacroStat title="US Inflation Rate (CPI)" value={formatPercent(macroData.inflationRate)} color="text-green-400" />
-                <MacroStat title="Fed Funds Rate" value={formatPercent(macroData.interestRate)} color="text-green-400" />
-            </div>
-        ) : <LoadingSpinner />}
-    </div>
-);
-
-const MacroStat: React.FC<{ title: string; value: string; color: string; }> = ({ title, value, color }) => (
-    <div>
-        <p className="text-sm text-gray-400">{title}</p>
-        <p className={`text-3xl font-bold font-mono ${color}`}>{value}</p>
-    </div>
-);
-
-
-const NewsHighlightsCard: React.FC<{ news: NewsSentiment | null }> = ({ news }) => (
-    <div className="bg-gray-800/50 p-6 rounded-lg border border-gray-700 shadow-lg h-full flex flex-col">
-        <h3 className="text-xl font-bold text-white mb-4">News Highlights</h3>
-        {news ? (
-            <>
-                <div className="bg-gradient-to-br from-purple-900/50 to-gray-800/30 p-4 rounded-lg border border-purple-700 mb-4">
-                    <p className="text-sm font-semibold text-purple-400">Top Story</p>
-                    <h4 className="font-bold text-white mt-1">{news.top_story.headline}</h4>
-                    <a href={news.top_story.url} target="_blank" rel="noopener noreferrer" className="text-xs text-purple-300 hover:underline mt-2 inline-flex items-center gap-1">Read More <ExternalLinkIcon className="w-3 h-3"/></a>
-                </div>
-                <div>
-                    <h4 className="text-sm font-semibold text-gray-400 mb-2">Trending Narratives</h4>
-                    <div className="space-y-2">
-                        {news.trending_narratives.slice(0, 3).map((narrative, i) => (
-                            <div key={i} className="bg-gray-700/50 p-2 rounded-md text-sm text-gray-300">{narrative}</div>
-                        ))}
-                    </div>
-                </div>
-                 <div className="mt-auto pt-4">
-                    <p className="text-sm text-gray-400">Overall Sentiment Score</p>
-                    <p className="text-3xl font-bold text-orange-400">{news.sentiment_score.toFixed(2)}</p>
-                </div>
-            </>
-        ) : <LoadingSpinner />}
-    </div>
-);
-
-const WatchlistCard: React.FC<{
-    watchlist: string[];
-    allCoins: CryptoPrice[];
-    onCoinClick: (coin: CryptoPrice) => void;
-}> = ({ watchlist, allCoins, onCoinClick }) => {
-    const [newItem, setNewItem] = useState('');
-    
-    const watchlistData = useMemo(() => {
-        return watchlist
-            .map(symbol => allCoins.find(c => c.symbol.toUpperCase() === symbol.toUpperCase()))
-            .filter((c): c is CryptoPrice => !!c);
-    }, [watchlist, allCoins]);
-
-    const handleAdd = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (newItem.trim()) {
-            watchlistService.addToWatchlist(newItem);
-            setNewItem('');
-        }
-    };
-    
-    return (
-        <div className="bg-gray-800/50 p-6 rounded-lg border border-gray-700 shadow-lg h-full flex flex-col">
-            <h3 className="text-xl font-bold text-white mb-4">Personal Watchlist</h3>
-            <div className="flex-grow space-y-2 mb-4">
-                {watchlistData.slice(0, 5).map(coin => (
-                    <button key={coin.id} onClick={() => onCoinClick(coin)} className="w-full text-left flex justify-between items-center bg-gray-700/50 p-2 rounded-md hover:bg-gray-700 transition-colors">
-                        <div className="flex items-center gap-2">
-                            <img src={`https://assets.coincap.io/assets/icons/${coin.symbol.toLowerCase()}@2x.png`} alt="" className="w-5 h-5 rounded-full"/>
-                            <span className="font-semibold text-white">{coin.symbol}</span>
-                        </div>
-                        <div className="text-right">
-                             <p className="font-mono text-white">{formatCurrency(coin.price)}</p>
-                        </div>
-                         <button onClick={(e) => { e.stopPropagation(); watchlistService.removeFromWatchlist(coin.symbol);}} className="p-1 text-gray-500 hover:text-red-400"><CloseIcon className="w-3 h-3"/></button>
-                    </button>
-                ))}
-            </div>
-            <form onSubmit={handleAdd} className="mt-auto flex gap-2">
-                <input
-                    type="text"
-                    value={newItem}
-                    onChange={e => setNewItem(e.target.value)}
-                    placeholder="Add symbol (e.g., SOL)"
-                    className="flex-grow bg-gray-700 border border-gray-600 rounded-lg p-2 text-white focus:outline-none focus:ring-1 focus:ring-purple-500"
-                />
-                <button type="submit" className="px-4 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg transition-colors">Add</button>
-            </form>
-        </div>
-    );
-};
-
-// --- MAIN DASHBOARD COMPONENT ---
 
 interface DashboardProps {
-    allCoins: CryptoPrice[];
-    newsSentiment: NewsSentiment | null;
-    macroData: MacroData | null;
-    watchlist: string[];
-    onShowCoinDetail: (coin: CryptoPrice) => void;
+  // empty props for now
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ allCoins, newsSentiment, macroData, watchlist, onShowCoinDetail }) => {
-    if (allCoins.length === 0) {
+// NEW COMPONENT for the AI-generated trade idea
+const JaxAlphaTrade: React.FC = () => {
+    const tradeIdea = {
+        symbol: "RNDR",
+        name: "Render Token",
+        decision: "BUY",
+        entryZone: "$7.60 - $7.85",
+        target1: "$9.20",
+        target2: "$11.50",
+        stopLoss: "$6.95",
+        confidence: 82,
+        rationale: [
+            "Unusual volume spikes on merged_master not yet reflected in price.",
+            "Social volume up 45% WoW (lunar_social), but sentiment is neutral. The herd hasn't arrived.",
+            "Tracked wallets show significant accumulation (~$2.5M) in the last 72 hours.",
+            "Open Interest climbing steadily while funding rates remain low (coinglass_data).",
+            "Setup mirrors a Q4 2023 pattern from historical_archive that preceded a 60% rally."
+        ]
+    };
+
+    const isBuy = tradeIdea.decision === 'BUY';
+    const confidenceColor = tradeIdea.confidence > 75 ? 'bg-green-500' : tradeIdea.confidence > 50 ? 'bg-yellow-500' : 'bg-red-500';
+
+    return (
+        <div className="md:col-span-2 bg-gradient-to-br from-gray-800 to-gray-900 border border-purple-800/50 rounded-2xl p-6 shadow-2xl shadow-purple-900/20 text-white">
+            <div className="flex items-center justify-between">
+                <h2 className="text-xl font-bold text-purple-300">🔥 JAX's Alpha Pick</h2>
+                <span className={`px-3 py-1 text-sm font-bold rounded-full flex items-center gap-2 ${isBuy ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>
+                    {isBuy ? <TrendingUpIcon className="w-4 h-4" /> : <TrendingDownIcon className="w-4 h-4" />}
+                    {tradeIdea.decision}
+                </span>
+            </div>
+
+            <div className="mt-4 flex flex-col md:flex-row items-start md:items-center gap-6">
+                <div className="flex-shrink-0 text-center">
+                    <p className="text-5xl font-extrabold tracking-wider">{tradeIdea.symbol}</p>
+                    <p className="text-gray-400">{tradeIdea.name}</p>
+                </div>
+
+                <div className="w-full grid grid-cols-2 md:grid-cols-3 gap-4">
+                    <div className="bg-gray-700/50 p-3 rounded-lg">
+                        <p className="text-xs text-gray-400">Entry Zone</p>
+                        <p className="font-mono font-bold text-lg">{tradeIdea.entryZone}</p>
+                    </div>
+                    <div className="bg-green-500/20 p-3 rounded-lg">
+                        <p className="text-xs text-green-300">Target 1</p>
+                        <p className="font-mono font-bold text-lg">{tradeIdea.target1}</p>
+                    </div>
+                     <div className="bg-green-500/20 p-3 rounded-lg">
+                        <p className="text-xs text-green-300">Target 2</p>
+                        <p className="font-mono font-bold text-lg">{tradeIdea.target2}</p>
+                    </div>
+                    <div className="bg-red-500/20 p-3 rounded-lg col-span-2 md:col-span-1">
+                        <p className="text-xs text-red-300">Stop Loss</p>
+                        <p className="font-mono font-bold text-lg">{tradeIdea.stopLoss}</p>
+                    </div>
+                </div>
+            </div>
+
+            <div className="mt-6">
+                <h3 className="font-bold text-gray-300">Rationale</h3>
+                <ul className="mt-2 text-sm text-gray-400 space-y-1 list-disc list-inside">
+                    {tradeIdea.rationale.map((reason, index) => <li key={index}>{reason}</li>)}
+                </ul>
+            </div>
+            
+            <div className="mt-6">
+                 <p className="text-xs text-gray-400 mb-1">AI Confidence ({tradeIdea.confidence}%)</p>
+                <div className="w-full bg-gray-700/50 rounded-full h-2.5">
+                    <div className={`${confidenceColor} h-2.5 rounded-full`} style={{ width: `${tradeIdea.confidence}%` }}></div>
+                </div>
+            </div>
+            
+            <div className="mt-6 text-xs text-gray-500 italic">
+                This is not financial advice. For educational use only.
+            </div>
+        </div>
+    );
+};
+
+export const Dashboard: React.FC<DashboardProps> = () => {
+    const [confluence, setConfluence] = useState<PipelineRow[]>([]);
+    const [compare, setCompare] = useState<CompareRow[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [errors, setErrors] = useState<string[]>([]);
+    const [walletConnected, setWalletConnected] = useState(false);
+
+    useEffect(() => {
+        const fetchData = async () => {
+            setLoading(true);
+            setErrors([]);
+            try {
+                const pipelineData = await googleSheetService.fetchData<any>('pipeline');
+                
+                const classicData = pipelineData
+                    .filter(row => row.Source?.toLowerCase() === 'classic')
+                    .map(r => ({ symbol: r.Asset, decision: r.Decision, confidence: r.Score * 100, score: r.Score, timestamp: r.Timestamp }));
+
+                const confluenceData = pipelineData
+                    .filter(row => row.Source?.toLowerCase() === 'confluence')
+                    .map(r => ({ symbol: r.Asset, decision: r.Decision, confidence: r.Score * 100, score: r.Score, timestamp: r.Timestamp }));
+                
+                setConfluence(confluenceData);
+
+                const confluenceMap = new Map(confluenceData.map(c => [c.symbol, c]));
+                const compareData: CompareRow[] = classicData.map(classicRow => {
+                    const confluenceRow = confluenceMap.get(classicRow.symbol);
+                    return {
+                        symbol: classicRow.symbol,
+                        classicDecision: classicRow.decision,
+                        classicConfidence: classicRow.confidence,
+                        confluenceDecision: confluenceRow?.decision,
+                        confluenceConfidence: confluenceRow?.confidence
+                    };
+                });
+                setCompare(compareData);
+
+            } catch (error) {
+                console.error("Failed to load dashboard data:", error);
+                setErrors(prev => [...prev, "Could not load pipeline data."]);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchData();
+    }, []);
+
+    const topConfluence = useMemo(() => {
+        return [...confluence]
+          .filter(r => r.decision === "BUY" || r.decision === "SELL")
+          .sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))
+          .slice(0, 5);
+    }, [confluence]);
+
+    const topDivergences = useMemo(() => {
+        const rows = compare
+          .map(r => ({
+            ...r,
+            gap: (r.confluenceConfidence ?? 0) - (r.classicConfidence ?? 0)
+          }))
+          .filter(r =>
+            (r.confluenceDecision === "BUY" || r.confluenceDecision === "SELL") &&
+            r.confluenceDecision !== r.classicDecision
+          )
+          .sort((a, b) => (b.gap ?? 0) - (a.gap ?? 0))
+          .slice(0, 5);
+        return rows;
+    }, [compare]);
+  
+    if (loading) {
         return (
             <div className="w-full h-full flex items-center justify-center">
-                <div className="text-center">
-                    <LoadingSpinner />
-                    <p className="mt-2 text-purple-300">Loading market data...</p>
-                </div>
+                <LoadingSpinner />
             </div>
         );
     }
-    
+
     return (
-        <div className="w-full h-full p-2 md:p-0">
-             <div className="mb-6 text-center">
-                <h1 className="text-4xl font-bold text-white">JAX AI Hub</h1>
-                <p className="text-lg text-gray-400">Your integrated crypto intelligence dashboard.</p>
-             </div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-4 gap-6">
-                <div className="2xl:col-span-1"><MarketOverviewCard allCoins={allCoins} /></div>
-                <div className="2xl:col-span-1"><MacroSnapshotCard macroData={macroData} /></div>
-                <div className="2xl:col-span-1"><NewsHighlightsCard news={newsSentiment} /></div>
-                <div className="2xl:col-span-1"><WatchlistCard watchlist={watchlist} allCoins={allCoins} onCoinClick={onShowCoinDetail} /></div>
+        <div className="w-full min-h-full flex flex-col gap-6 p-6 bg-gray-50 text-gray-900">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <JaxAlphaTrade />
+
+                <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-lg">
+                    <h3 className="text-xl font-bold">👛 Wallet</h3>
+                    <div className="mt-4">
+                        {walletConnected ? (
+                        <div>
+                            <p className="text-green-600 font-semibold">Connected ✅</p>
+                            <p className="text-sm text-gray-500 mt-1">Balance: $—</p>
+                        </div>
+                        ) : (
+                        <button
+                            onClick={() => setWalletConnected(true)}
+                            className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 font-bold text-white shadow-md hover:shadow-lg"
+                        >
+                            Connect Wallet
+                        </button>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-lg">
+                    <div className="flex items-center justify-between">
+                        <h3 className="text-lg font-bold text-purple-700">Top Confluence Picks</h3>
+                        <span className="text-xs text-gray-500">Stage5_Confluence</span>
+                    </div>
+                    <div className="mt-4 overflow-x-auto">
+                        <table className="w-full text-sm">
+                        <thead className="text-left text-gray-600">
+                            <tr className="border-b border-gray-200/60">
+                            <th className="py-2 pr-4">Symbol</th>
+                            <th className="py-2 pr-4">Decision</th>
+                            <th className="py-2 pr-4">Confidence</th>
+                            <th className="py-2 pr-4">Score</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {topConfluence.length === 0 && (
+                            <tr><td className="py-4 text-gray-500" colSpan={4}>No picks yet.</td></tr>
+                            )}
+                            {topConfluence.map((r, i) => (
+                            <tr key={r.symbol + i} className="border-b border-gray-100">
+                                <td className="py-2 pr-4 font-semibold">{r.symbol}</td>
+                                <td className="py-2 pr-4">
+                                <span className={r.decision === "SELL" ? "text-red-600" : "text-green-600"}>
+                                    {r.decision ?? "—"}
+                                </span>
+                                </td>
+                                <td className="py-2 pr-4"><span className={`text-xs font-semibold ${r.decision === "BUY" ? "text-green-600" : r.decision === "SELL" ? "text-red-600" : "text-purple-600"}`}>{Number.isFinite(r.confidence) ? `${(r.confidence as number).toFixed(0)}%` : "—"}</span></td>
+                                <td className="py-2 pr-4">{Number.isFinite(r.score) ? (r.score as number).toFixed(2) : "—"}</td>
+                            </tr>
+                            ))}
+                        </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-lg">
+                    <div className="flex items-center justify-between">
+                        <h3 className="text-lg font-bold text-purple-700">Pipeline Compare — Divergences</h3>
+                        <span className="text-xs text-gray-500">Pipeline_Compare</span>
+                    </div>
+                    <div className="mt-4 overflow-x-auto">
+                        <table className="w-full text-sm">
+                        <thead className="text-left text-gray-600">
+                            <tr className="border-b border-gray-200/60">
+                            <th className="py-2 pr-4">Symbol</th>
+                            <th className="py-2 pr-4">Classic</th>
+                            <th className="py-2 pr-4">Confluence</th>
+                            <th className="py-2 pr-4">Δ Conf</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {topDivergences.length === 0 && (
+                            <tr><td className="py-4 text-gray-500" colSpan={4}>No divergences.</td></tr>
+                            )}
+                            {topDivergences.map((r, i) => (
+                            <tr key={r.symbol + i} className="border-b border-gray-100">
+                                <td className="py-2 pr-4 font-semibold">{r.symbol}</td>
+                                <td className="py-2 pr-4">
+                                <span className={ r.classicDecision === "SELL" ? "text-red-500" : r.classicDecision === "BUY" ? "text-green-500" : "text-gray-800"}>
+                                    {r.classicDecision ?? "—"}
+                                </span>{" "}
+                                <span className="text-xs text-gray-500">({Number.isFinite(r.classicConfidence) ? (r.classicConfidence as number).toFixed(0) : "—"}%)</span>
+                                </td>
+                                <td className="py-2 pr-4">
+                                <span className={r.confluenceDecision === "SELL" ? "text-red-500" : r.confluenceDecision === "BUY" ? "text-green-500" : "text-gray-800"}>
+                                    {r.confluenceDecision ?? "—"}
+                                </span>{" "}
+                                <span className="text-xs text-gray-500">({Number.isFinite(r.confluenceConfidence) ? (r.confluenceConfidence as number).toFixed(0) : "—"}%)</span>
+                                </td>
+                                <td className="py-2 pr-4">{Number.isFinite(r.gap) ? (r.gap as number).toFixed(0) : "—"}%</td>
+                            </tr>
+                            ))}
+                        </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div className="w-full">
+                <MergedMasterTable />
+            </div>
+
+            <div className="text-xs text-gray-500">
+                {errors.length > 0 && (
+                <ul className="mt-2 text-red-500 list-disc list-inside">
+                    {errors.map((e, idx) => <li key={idx}>{e}</li>)}
+                </ul>
+                )}
             </div>
         </div>
     );

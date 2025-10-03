@@ -1,3 +1,5 @@
+
+
 import React, { useState, useEffect } from 'react';
 import { ChatInterface } from './components/ChatInterface';
 import { SideNav } from './components/SideNav';
@@ -7,11 +9,11 @@ import { DataSources } from './components/DataSources';
 import { PredictionPipeline, PipelineStageDefinition } from './components/PredictionPipeline';
 import { MarketTrends } from './components/MarketTrends';
 import { SimulatedWallet } from './components/SimulatedWallet';
-import { MarketRewind } from './components/MarketRewind';
 import { ActiveLearning } from './components/ActiveLearning';
 import { Experiments } from './components/Experiments';
 import { JaxSignals } from './components/JaxSignals';
-import { SignalStudio } from './components/SignalStudio';
+import { SignalLab } from './components/SignalLab';
+import { MarketRewind } from './components/MarketRewind';
 import { MacroView } from './components/MacroView';
 import { MenuIcon, CloseIcon } from './components/Icons';
 import { tradeSimulatorService, Trade } from './services/tradeSimulatorService';
@@ -23,8 +25,10 @@ import { macroService, MacroData, HistoricalMacroDataPoint } from './services/ma
 import { btcHistoryService, BtcHistoryEntry } from './services/btcHistoryService';
 import { watchlistService } from './services/watchlistService';
 import { CoinDetailModal } from './components/CoinDetailModal';
+import { googleSheetService } from './services/googleSheetService';
+import { CoreSettings } from './components/CoreSettings'; // New Admin Panel
 
-export type ActiveView = 'chat' | 'specs' | 'pricing' | 'data' | 'pipeline' | 'trends' | 'wallet' | 'rewind' | 'learning' | 'experiments' | 'signals' | 'signalStudio' | 'dashboard' | 'macro';
+export type ActiveView = 'chat' | 'specs' | 'pricing' | 'data' | 'pipeline' | 'trends' | 'wallet' | 'learning' | 'experiments' | 'signals' | 'signalLab' | 'dashboard' | 'macro' | 'coreSettings' | 'rewind';
 
 export interface PipelineCryptoPrice extends CryptoPrice {
   confidence?: number;
@@ -35,44 +39,43 @@ type PipelineState = { [key: string]: PipelineCryptoPrice[] };
 type ExitedState = { [key: string]: { coin: PipelineCryptoPrice; reason: string } | null };
 
 
-// --- NEW, REFINED STAGE DEFINITIONS FOR EXCLUSIVE FUNNEL ---
 const PIPELINE_STAGES: PipelineStageDefinition[] = [
   { 
     id: 'stage1', 
-    title: 'Momentum Watch', 
-    description: 'Assets showing initial positive 24h price action.',
-    passCondition: (coin: CryptoPrice) => coin.change24h > 2,
-    getConditionText: (coin: CryptoPrice) => `24h Change > 2% (Current: ${coin.change24h.toFixed(2)}%)`
+    title: 'Hold Signals', 
+    description: 'Assets AI recommends holding based on current conditions.',
+    passCondition: () => true,
+    getConditionText: (coin: PipelineCryptoPrice) => `AI Confidence: ${coin.confidence?.toFixed(0)}%`
   },
   { 
     id: 'stage2', 
-    title: 'Liquidity Screen', 
-    description: 'Momentum assets that also have an established market cap.',
-    passCondition: (coin: CryptoPrice) => (coin.marketCap ?? 0) > 100000000,
-    getConditionText: (coin: CryptoPrice) => `MCap > $100M (Current: ${coin.marketCap ? `$${(coin.marketCap / 1_000_000).toFixed(0)}M` : 'N/A'})`
+    title: 'Neutral', 
+    description: 'Assets with no strong signal.',
+    passCondition: () => true,
+    getConditionText: (coin: PipelineCryptoPrice) => `AI Confidence: ${coin.confidence?.toFixed(0)}%`
   },
   { 
     id: 'stage3', 
-    title: 'Risk Screen', 
-    description: 'Liquid assets filtered for extreme volatility.',
-    passCondition: (coin: CryptoPrice) => coin.change24h < 25,
-    getConditionText: (coin: CryptoPrice) => `24h Change < 25% (Current: ${coin.change24h.toFixed(2)}%)`
+    title: 'Sell Signals', 
+    description: 'Assets AI recommends selling or shorting.',
+    passCondition: () => true,
+    getConditionText: (coin: PipelineCryptoPrice) => `AI Confidence: ${coin.confidence?.toFixed(0)}%`
   },
 ];
 
 const EXECUTION_STAGE_DEFINITION: PipelineStageDefinition = {
   id: 'stage4',
-  title: 'Execution Candidates',
-  description: 'Assets passing all filters, scored for confidence before trade execution.',
-  passCondition: () => true, // Membership is determined by passing all previous stages
-  getConditionText: (coin: CryptoPrice) => `Awaiting final AI confidence check.`
+  title: 'Buy Signals',
+  description: 'Assets AI recommends buying based on strong bullish signals.',
+  passCondition: () => true,
+  getConditionText: (coin: PipelineCryptoPrice) => `AI Confidence: ${coin.confidence?.toFixed(0)}%`
 };
 
 const ACTIVE_TRADES_STAGE_DEFINITION: PipelineStageDefinition = {
   id: 'stage5',
   title: 'Active Trades',
   description: 'Simulated open positions being monitored for TP/SL.',
-  passCondition: () => true, // All open trades are in this stage
+  passCondition: () => true,
   getConditionText: (coin: PipelineCryptoPrice) => `Entry: $${coin.entryPrice?.toFixed(2)}`
 };
 
@@ -81,111 +84,115 @@ const HOLDING_STAGE_DEFINITION: PipelineStageDefinition = {
     title: 'Recommended Holds',
     description: 'Recently closed, profitable trades suggested for long-term watch.',
     passCondition: () => true,
-    getConditionText: (coin: PipelineCryptoPrice) => `Realized P/L: ${formatCurrency(coin.pnl)}`
+    getConditionText: (coin: PipelineCryptoPrice) => `Realized P/L: $${coin.pnl != null ? coin.pnl.toFixed(2) : '—'}`
 };
-
-const formatCurrency = (value: number | null | undefined) => {
-    if (value === null || value === undefined) return 'N/A';
-    return value.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
-};
-
 
 const ALL_STAGE_DEFINITIONS = [...PIPELINE_STAGES, EXECUTION_STAGE_DEFINITION, ACTIVE_TRADES_STAGE_DEFINITION, HOLDING_STAGE_DEFINITION];
 const RENDER_PIPELINE_STAGES = [...PIPELINE_STAGES, EXECUTION_STAGE_DEFINITION, ACTIVE_TRADES_STAGE_DEFINITION];
-
 
 const App: React.FC = () => {
   const [isNavOpen, setIsNavOpen] = useState(true);
   const [activeView, setActiveView] = useState<ActiveView>('dashboard');
   const [isFooterExpanded, setIsFooterExpanded] = useState(false);
   
-  // --- Centralized Pipeline State ---
   const [pipeline, setPipeline] = useState<PipelineState>({ stage1: [], stage2: [], stage3: [], stage4: [], stage5: [], stage6: [] });
   const [exitedCoins, setExitedCoins] = useState<ExitedState>({ stage1: null, stage2: null, stage3: null, stage4: null, stage5: null, stage6: null });
   const [allCoins, setAllCoins] = useState<CryptoPrice[]>([]);
   const [openTrades, setOpenTrades] = useState<Trade[]>([]);
   const [isPipelineLoading, setIsPipelineLoading] = useState(true);
 
-  // --- NEW: State for global data ---
   const [globalLiquidity, setGlobalLiquidity] = useState<GlobalLiquidity | null>(null);
   const [newsSentiment, setNewsSentiment] = useState<NewsSentiment | null>(null);
 
-  // --- NEW: State for dashboard data ---
   const [macroData, setMacroData] = useState<MacroData | null>(null);
   const [watchlist, setWatchlist] = useState<string[]>(watchlistService.getWatchlistSymbols());
   
-  // --- NEW: State for coin detail modal ---
   const [detailCoin, setDetailCoin] = useState<CryptoPrice | null>(null);
 
-  // --- NEW: State for Macro view ---
   const [historicalMacroData, setHistoricalMacroData] = useState<HistoricalMacroDataPoint[]>([]);
   const [allBtcHistory, setAllBtcHistory] = useState<BtcHistoryEntry[]>([]);
 
-
-  // Automatically collapse footer on non-pipeline/chat views
   useEffect(() => {
     if (activeView !== 'pipeline' && activeView !== 'chat' && isFooterExpanded) {
         setIsFooterExpanded(false);
     }
   }, [activeView, isFooterExpanded]);
 
-  // Watchlist subscription
   useEffect(() => {
     const updateWatchlist = () => setWatchlist(watchlistService.getWatchlistSymbols());
     watchlistService.subscribe(updateWatchlist);
     return () => watchlistService.unsubscribe(updateWatchlist);
   }, []);
 
-  // Trade subscription for pipeline footer and stage 5
   useEffect(() => {
     const updateTrades = () => {
       setOpenTrades(tradeSimulatorService.getAllTrades().filter(t => t.status === 'open'));
     };
     tradeSimulatorService.subscribe(updateTrades);
-    updateTrades(); // Initial fetch
+    updateTrades();
     return () => tradeSimulatorService.unsubscribe(updateTrades);
   }, []);
 
-  // --- Initial Data Fetch and Simulation (runs once) ---
   useEffect(() => {
     const runInitialLoad = async () => {
         try {
-            // Initialize services that fetch data
-            btcHistoryService.init();
-
-            const prices = await fetchLivePricing();
-
-            // This is important for other parts of the app that rely on updated trades.
-            if (prices.length > 0) {
-              tradeSimulatorService.updateOpenTrades(prices);
-            }
-
-            setGlobalLiquidity(await getGlobalLiquidity());
-            setNewsSentiment(await getNewsSentiment());
-            setMacroData(await macroService.getMacroData());
-            setHistoricalMacroData(await macroService.getHistoricalMacroData());
+            await btcHistoryService.init();
+            
+            // Fetch all data concurrently
+            const [prices, globalLiq, newsSent, macro, histMacro] = await Promise.all([
+                fetchLivePricing(),
+                getGlobalLiquidity(),
+                getNewsSentiment(),
+                macroService.getMacroData(),
+                macroService.getHistoricalMacroData()
+            ]);
+            
+            setAllCoins(prices);
+            setGlobalLiquidity(globalLiq);
+            setNewsSentiment(newsSent);
+            setMacroData(macro);
+            setHistoricalMacroData(histMacro);
             setAllBtcHistory(btcHistoryService.getBtcHistory());
+
+            if (prices.length > 0) {
+                tradeSimulatorService.updateOpenTrades(prices);
+                signalsService.checkForSignalTriggers(prices, newsSent);
+            }
             
             if (isPipelineLoading && prices.length > 0) setIsPipelineLoading(false);
             
-            setAllCoins(prices);
-
-            signalsService.checkForSignalTriggers(prices);
-
-            // --- Single run of pipeline logic ---
+            // --- NEW PIPELINE LOGIC ---
+            const pipelineSignals = await googleSheetService.fetchData<any>('pipeline');
             const newPipeline: PipelineState = { stage1: [], stage2: [], stage3: [], stage4: [], stage5: [], stage6: [] };
+            const priceMap = new Map(prices.map(p => [p.symbol.toUpperCase(), p]));
 
+            pipelineSignals.forEach(signal => {
+                const coinData = priceMap.get(signal.Asset?.toUpperCase());
+                if (coinData) {
+                    const pipelineCoin: PipelineCryptoPrice = {
+                        ...coinData,
+                        confidence: signal.Score * 100, // Assuming score is 0-1
+                    };
+
+                    switch (signal.Decision?.toUpperCase()) {
+                        case 'BUY': newPipeline.stage4.push(pipelineCoin); break;
+                        case 'SELL': newPipeline.stage3.push(pipelineCoin); break;
+                        case 'HOLD': newPipeline.stage1.push(pipelineCoin); break;
+                        default: break; // Or push to a 'neutral' stage if desired
+                    }
+                }
+            });
+
+            // Update active trades for stage 5
             const currentOpenTrades = tradeSimulatorService.getAllTrades().filter(t => t.status === 'open');
             newPipeline.stage5 = currentOpenTrades.map(trade => {
                 const liveCoinData = prices.find(p => p.id === trade.coin.id) || trade.coin;
                 return { ...liveCoinData, pnl: trade.pnl, entryPrice: trade.entryPrice, id: trade.id };
             });
-            const openOrRecentlyClosedTradeIds = new Set(tradeSimulatorService.getAllTrades().map(t => t.coin.id));
 
+            // Holding stage logic remains the same
             const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-            const recentProfitableClosed = tradeSimulatorService.getAllTrades().filter(
-                t => t.status === 'closed' && (t.pnl ?? 0) > 0 && t.closeTimestamp && t.closeTimestamp > sevenDaysAgo
-            );
+            const recentProfitableClosed = tradeSimulatorService.getAllTrades().filter(t => t.status === 'closed' && (t.pnl ?? 0) > 0 && t.closeTimestamp && t.closeTimestamp > sevenDaysAgo);
             const holdingMap = new Map<string, Trade>();
             recentProfitableClosed.forEach(trade => {
                 if (!holdingMap.has(trade.coin.id) || trade.closeTimestamp! > holdingMap.get(trade.coin.id)!.closeTimestamp!) {
@@ -193,66 +200,24 @@ const App: React.FC = () => {
                 }
             });
             newPipeline.stage6 = Array.from(holdingMap.values()).map(trade => ({...trade.coin, pnl: trade.pnl, entryPrice: trade.entryPrice, id: trade.id }));
-            const holdingIds = new Set(newPipeline.stage6.map(c => c.id));
 
-            const candidates = prices.filter(c => !openOrRecentlyClosedTradeIds.has(c.id) && !holdingIds.has(c.id));
-
-            candidates.forEach(coin => {
-                const passesS1 = PIPELINE_STAGES[0].passCondition(coin);
-                if (!passesS1) {
-                     newPipeline.stage1.push(coin);
-                     return;
-                }
-                const passesS2 = PIPELINE_STAGES[1].passCondition(coin);
-                const passesS3 = PIPELINE_STAGES[2].passCondition(coin);
-                if (passesS2 && passesS3) {
-                    const momentumScore = Math.min(1, Math.max(0, (coin.change24h - 2) / (25 - 2)));
-                    const mcap = coin.marketCap ?? 100_000_000;
-                    const mcapScore = Math.min(1, Math.max(0, (Math.log10(mcap) - 8) / (12.7 - 8)));
-                    const confidence = (momentumScore * 0.7 + mcapScore * 0.3) * 100;
-                    newPipeline.stage4.push({ ...coin, confidence });
-                } else if (passesS2) {
-                    newPipeline.stage3.push(coin);
-                } else {
-                    newPipeline.stage2.push(coin);
-                }
-            });
-
+            // Auto-execute trades based on new signals
             const executionThreshold = tradeSimulatorService.getSettings().aiConfidence;
             for (const coin of newPipeline.stage4) {
                  if ((coin.confidence ?? 0) > executionThreshold) {
                     tradeSimulatorService.executeTrade(coin, 'buy');
                  }
             }
-            
-            setPipeline(currentPipeline => {
-                const newExitedState: ExitedState = { stage1: null, stage2: null, stage3: null, stage4: null, stage5: null, stage6: null };
-                ALL_STAGE_DEFINITIONS.slice(0, 4).forEach(stage => {
-                    const previousStageCoins = currentPipeline[stage.id] ?? [];
-                    const previousIds = new Set(previousStageCoins.map(c => c.id));
-                    const currentIds = new Set(newPipeline[stage.id]?.map(c => c.id) ?? []);
-                    let lastExitedCoin = null;
-                    for (const id of previousIds) {
-                        if (!currentIds.has(id)) {
-                            const exitedCoinData = previousStageCoins.find(c => c.id === id);
-                            if (exitedCoinData) {
-                                const latestPriceData = prices.find(p => p.id === id);
-                                lastExitedCoin = { 
-                                    coin: latestPriceData || exitedCoinData, 
-                                    reason: "Advanced or exited." 
-                                };
-                            }
-                        }
-                    }
-                    newExitedState[stage.id] = lastExitedCoin;
-                });
-                setExitedCoins(newExitedState);
-                return newPipeline;
-            });
+
+            setPipeline(newPipeline);
+            // Note: Exited coins logic is complex and may not map well to the new signal-based pipeline.
+            // For now, we'll simplify and not display exited coins to avoid incorrect information.
+            setExitedCoins({ stage1: null, stage2: null, stage3: null, stage4: null, stage5: null, stage6: null });
+
 
         } catch (error) {
             console.error("Error during initial data load:", error);
-            setIsPipelineLoading(false); // Stop loading indicator on error
+            setIsPipelineLoading(false);
         }
     };
 
@@ -268,18 +233,18 @@ const App: React.FC = () => {
   const footerHeightClass = isFooterExpanded ? 'pb-[33vh]' : 'pb-8';
 
   return (
-    <div className="h-screen bg-gray-900 text-gray-100 font-sans flex flex-col overflow-hidden">
+    <div className="h-screen bg-gray-100 text-gray-800 font-sans flex flex-col overflow-hidden">
       <div className="flex flex-1 overflow-hidden">
         <main className={`flex-1 flex flex-col p-2 md:p-4 overflow-y-auto relative transition-all duration-300 ease-in-out ${footerHeightClass} ${isNavOpen ? 'md:mr-64' : ''}`}>
           <button
             onClick={toggleNav}
-            className={`fixed top-4 right-4 text-gray-300 hover:text-white z-40 p-2 bg-gray-800/50 rounded-md transition-transform duration-300 ease-in-out ${isNavOpen ? 'md:translate-x-[-16rem]' : 'md:translate-x-0'}`}
+            className={`fixed top-4 right-4 text-gray-600 hover:text-gray-900 z-40 p-2 bg-white/50 backdrop-blur-sm rounded-md shadow-md transition-transform duration-300 ease-in-out ${isNavOpen ? 'md:translate-x-[-16rem]' : 'md:translate-x-0'}`}
             aria-label={isNavOpen ? "Close navigation menu" : "Open navigation menu"}
           >
             {isNavOpen ? <CloseIcon /> : <MenuIcon />}
           </button>
 
-          {activeView === 'dashboard' && <Dashboard allCoins={allCoins} newsSentiment={newsSentiment} macroData={macroData} watchlist={watchlist} onShowCoinDetail={(coin) => setDetailCoin(coin)} />}
+          {activeView === 'dashboard' && <Dashboard />}
           {activeView === 'chat' && <ChatInterface allCoins={allCoins} />}
           {activeView === 'specs' && <SpecDetails />}
           {activeView === 'pricing' && <SpotLive />}
@@ -287,12 +252,13 @@ const App: React.FC = () => {
           {activeView === 'pipeline' && <PredictionPipeline pipeline={pipeline} exitedCoins={exitedCoins} allCoins={allCoins} isLoading={isPipelineLoading} stages={RENDER_PIPELINE_STAGES} onShowCoinDetail={(coin) => setDetailCoin(coin)} />}
           {activeView === 'trends' && <MarketTrends allCoins={allCoins} newsSentiment={newsSentiment} />}
           {activeView === 'wallet' && <SimulatedWallet />}
-          {activeView === 'rewind' && <MarketRewind />}
           {activeView === 'learning' && <ActiveLearning allCoins={allCoins} />}
           {activeView === 'experiments' && <Experiments allCoins={allCoins} />}
           {activeView === 'signals' && <JaxSignals allCoins={allCoins} />}
-          {activeView === 'signalStudio' && <SignalStudio allCoins={allCoins} />}
+          {activeView === 'signalLab' && <SignalLab btcHistory={allBtcHistory} allCoins={allCoins} />}
+          {activeView === 'rewind' && <MarketRewind btcHistory={allBtcHistory} />}
           {activeView === 'macro' && <MacroView btcHistory={allBtcHistory} macroHistory={historicalMacroData} />}
+          {activeView === 'coreSettings' && <CoreSettings />}
         </main>
 
         <SideNav
